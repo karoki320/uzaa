@@ -4,15 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Uzaa POS | Point of sale for Kenyan shops</title>
-<meta name="description" content="Uzaa is a simple point of sale for Kenyan businesses. Sell, track stock per branch, and see your week. KES 2,500 per quarter.">
+<meta name="description" content="Uzaa is a simple point of sale for Kenyan businesses. Sell, track stock per branch, and see your day, live. KES 2,500 per quarter.">
 <meta property="og:title" content="Uzaa POS | Point of sale for Kenyan shops">
-<meta property="og:description" content="Sell, track stock per branch, and see your week. From KES 2,500 per quarter.">
-<meta property="og:image" content="img/sell-tablet.webp">
+<meta property="og:description" content="Sell, track stock per branch, and see your day, live. From KES 2,500 per quarter.">
 <meta name="theme-color" content="#FCF9F0">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B5C87'/%3E%3Ctext x='32' y='45' font-size='38' font-family='Arial' font-weight='700' text-anchor='middle' fill='white'%3EU%3C/text%3E%3C/svg%3E">
 <link rel="preload" href="fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="img/sell-tablet.webp" as="image" fetchpriority="high">
 <style>
 @font-face{font-family:'Plus Jakarta Sans';font-weight:400;font-display:swap;src:url(fonts/plus-jakarta-sans-latin-400-normal.woff2) format('woff2')}
 @font-face{font-family:'Plus Jakarta Sans';font-weight:700;font-display:swap;src:url(fonts/plus-jakarta-sans-latin-700-normal.woff2) format('woff2')}
@@ -53,10 +51,6 @@ header .btn{min-height:48px;padding:0 18px;font-size:15px}
 .hero-grid{display:grid;gap:36px;align-items:center}
 @media(min-width:900px){.hero-grid{grid-template-columns:1fr 1.1fr}}
 .lead{font-size:19px;color:var(--muted);max-width:34em}
-.shots{position:relative;padding-bottom:40px}
-.shots .tablet{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff;box-shadow:0 1px 0 var(--line)}
-.shots .tablet img{width:100%}
-.shots .phone{position:absolute;left:-8px;bottom:0;width:30%;max-width:170px;border:6px solid var(--ink);border-radius:26px;overflow:hidden;background:#fff}
 .facts{display:grid;gap:12px;margin-top:34px;grid-template-columns:1fr 1fr}
 @media(min-width:900px){.facts{grid-template-columns:repeat(4,1fr)}}
 .fact{font-weight:700;font-size:15px;line-height:1.35;border-left:3px solid var(--accent);padding-left:12px}
@@ -65,17 +59,6 @@ header .btn{min-height:48px;padding:0 18px;font-size:15px}
 .grid3{display:grid;gap:16px}
 @media(min-width:800px){.grid3{grid-template-columns:repeat(3,1fr)}}
 .num{width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
-
-/* gallery */
-.gallery{display:grid;gap:16px;grid-template-columns:1fr}
-@media(min-width:620px){.gallery{grid-template-columns:1fr 1fr}}
-@media(min-width:980px){.gallery{grid-template-columns:repeat(3,1fr)}}
-.shot{display:block;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.shot img{aspect-ratio:3/2;object-fit:cover;object-position:top left;width:100%;border-bottom:1px solid var(--line);background:#fff}
-.shot span{display:block;padding:14px 16px}
-.shot b{display:block;font-size:16px}
-.shot small{color:var(--muted);font-size:14px;line-height:1.4;display:block}
-.shot.narrow img{object-fit:contain;background:#f4f1e6;padding:10px}
 
 /* roles table */
 .tw{overflow-x:auto}
@@ -117,6 +100,93 @@ details p{padding:0 18px;margin:0 0 16px;color:var(--muted)}
 .cta .btn{background:#fff;color:var(--accent);border-color:#fff}
 .cta .btn.ghost{background:transparent;color:#fff}
 footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px solid var(--line);margin-top:64px}
+/* sale story */
+.story{position:relative;width:100%}
+.st-wrap{position:relative;width:100%;overflow:hidden}
+.st-stage{position:absolute;left:0;top:0;width:560px;height:585px;transform-origin:0 0;transition:opacity .3s}
+.story[data-mode=narrow] .st-stage{width:360px}
+.st-stage.fade{opacity:0}
+.st-grp{position:absolute;left:0;top:0;width:360px;height:585px;transition:opacity .5s}
+.st-grp.out{opacity:0}
+.st-tablet{position:absolute;left:0;top:0;width:360px;height:268px;background:#14181F;border-radius:24px;padding:9px;box-shadow:0 22px 30px -20px rgba(20,24,31,.55)}
+.st-scr{position:relative;background:var(--bg);border-radius:16px;height:100%;overflow:hidden;display:flex;flex-direction:column;font-size:12px;line-height:1.3}
+.st-bar{display:flex;gap:8px;align-items:baseline;padding:6px 10px;background:var(--surface);border-bottom:1px solid var(--line)}
+.st-bar b{color:var(--accent);font-size:14px;font-weight:800;letter-spacing:-.02em}
+.st-bar span{color:var(--muted);font-size:10px}
+.st-body{flex:1;display:grid;grid-template-columns:1fr 168px;gap:8px;padding:8px;min-height:0}
+.st-tiles{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-content:start}
+.st-tile{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:11px;font-weight:700;line-height:1.2;transition:background .2s,border-color .2s}
+.st-tile i{display:block;font-style:normal;color:var(--accent);font-weight:800;font-size:12px;margin-top:2px}
+.st-tile.hit{background:var(--tint);border-color:var(--accent)}
+.st-cart{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 8px;display:flex;flex-direction:column;min-height:0}
+.st-cart h4{margin:0 0 4px;font-size:11px;font-weight:800}
+.st-lines{flex:1;overflow:hidden;font-size:10.5px}
+.st-line{display:flex;justify-content:space-between;gap:4px;padding:2px 0;border-bottom:1px dashed var(--line)}
+.st-line.new{animation:stIn .35s ease-out}
+.st-empty{color:var(--muted);font-size:10.5px}
+@keyframes stIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.st-pay{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin:5px 0}
+.st-pay span{border:1px solid var(--line);border-radius:6px;font-size:9.5px;text-align:center;padding:3px 0;font-weight:700;transition:background .2s}
+.st-pay span.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.st-total{display:flex;justify-content:space-between;font-weight:800;font-size:13px;margin-bottom:4px}
+.st-charge{background:var(--accent);color:#fff;border-radius:8px;text-align:center;font-weight:800;font-size:12px;padding:6px 0;transition:transform .12s}
+.st-charge.press{transform:scale(.93)}
+.st-done{position:absolute;inset:0;background:rgba(255,253,246,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:15px;opacity:0;transition:opacity .25s;pointer-events:none}
+.st-done.on{opacity:1}
+.st-done s{display:block;width:44px;height:44px;border-radius:50%;background:var(--accent);position:relative;text-decoration:none}
+.st-done s:after{content:"";position:absolute;left:14px;top:12px;width:16px;height:9px;border-left:4px solid #fff;border-bottom:4px solid #fff;transform:rotate(-45deg)}
+.st-printer{position:absolute;left:50px;top:286px;width:260px;height:74px;background:linear-gradient(#3C4552,#2A303A);border-radius:16px 16px 10px 10px;box-shadow:0 16px 22px -16px rgba(20,24,31,.6);z-index:3;color:#9aa3b2;font-size:10px;font-weight:700;letter-spacing:.04em;padding:12px 16px}
+.st-printer:after{content:"";position:absolute;left:36px;right:36px;bottom:9px;height:6px;border-radius:3px;background:#0b0e13}
+.st-led{position:absolute;right:16px;top:14px;width:10px;height:10px;border-radius:50%;background:#6b7280;transition:background .2s,box-shadow .2s}
+.st-led.on{background:#3ddc84;box-shadow:0 0 8px #3ddc84}
+.st-pw{position:absolute;left:105px;top:360px;width:150px;height:222px;overflow:hidden;z-index:2}
+.st-rc{position:relative;width:150px;background:#fff;color:#14181F;font:10px/1.4 'Courier New',Courier,monospace;padding:10px 10px 14px;box-shadow:0 2px 8px rgba(0,0,0,.14);transform:translateY(-102%)}
+.st-rc:after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:6px;background:conic-gradient(from -45deg at bottom,#0000,#fff 1deg 89deg,#0000 90deg) 50%/8px 100%}
+.st-rc div{display:flex;justify-content:space-between;gap:4px}
+.st-rc .c{justify-content:center;text-align:center}
+.st-rc hr{border:0;border-top:1px dashed #8a8f98;margin:4px 0}
+.st-rc .t{font-weight:700;font-size:11px}
+.st-pw.gone{opacity:0;transition:opacity .4s}
+.st-dim{position:absolute;left:0;top:0;width:360px;height:585px;background:rgba(252,249,240,.78);opacity:0;transition:opacity .4s;z-index:5;pointer-events:none}
+.st-dim.on{opacity:1}
+.st-show{position:absolute;left:105px;top:120px;width:150px;z-index:6;transform:scale(.55) translateY(160px);opacity:0;transition:transform .7s cubic-bezier(.2,.8,.2,1),opacity .35s;filter:drop-shadow(0 14px 18px rgba(20,24,31,.28))}
+.st-show.on{transform:scale(1.4);opacity:1}
+.st-show .st-rc{transform:none}
+.st-phone{position:absolute;left:376px;top:70px;width:184px;height:384px;background:#14181F;border-radius:30px;padding:8px;box-shadow:0 22px 30px -20px rgba(20,24,31,.55);transition:opacity .5s,transform .5s}
+.story[data-mode=narrow] .st-phone{left:88px;top:40px;opacity:0;transform:scale(.94)}
+.story[data-mode=narrow] .st-phone.in{opacity:1;transform:none}
+.st-ps{position:relative;height:100%;background:var(--bg);border-radius:23px;overflow:hidden;padding:14px 12px 10px;font-size:11px;line-height:1.3}
+.st-ph{display:flex;justify-content:space-between;align-items:baseline}
+.st-ph b{color:var(--accent);font-size:14px;font-weight:800}
+.st-ph span{color:var(--muted);font-size:10px}
+.st-lab{color:var(--muted);font-size:10px;margin-top:10px}
+.st-big{font-size:24px;font-weight:800;letter-spacing:-.03em;line-height:1.15}
+.st-sub{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.st-sub i{width:7px;height:7px;border-radius:50%;background:#2e9e5b;animation:stPulse 1.6s infinite}
+@keyframes stPulse{50%{opacity:.3}}
+.st-chart{display:flex;align-items:flex-end;gap:4px;height:62px;margin:6px 0 2px}
+.st-chart span{flex:1;background:#BBD9EC;border-radius:3px 3px 0 0}
+.st-chart span:last-child{background:var(--accent);transition:height .9s ease-out}
+.st-sales{margin-top:4px}
+.st-row{display:grid;grid-template-columns:1fr auto;gap:0 6px;padding:5px 0;border-bottom:1px solid var(--line);font-size:10.5px}
+.st-row b{font-weight:700}
+.st-row span{grid-column:1;color:var(--muted);font-size:9.5px}
+.st-row em{grid-column:2;grid-row:1/3;align-self:center;font-style:normal;font-weight:800}
+.st-row.fresh{background:var(--tint);margin:0 -6px;padding:5px 6px;border-radius:7px;animation:stIn .4s ease-out}
+.st-toast{position:absolute;left:8px;right:8px;top:8px;background:var(--accent);color:#fff;border-radius:12px;padding:8px 10px;font-weight:700;font-size:11px;transform:translateY(-140%);transition:transform .45s cubic-bezier(.2,.8,.2,1);z-index:2}
+.st-toast.on{transform:none}
+.st-toast small{display:block;font-weight:400;opacity:.9;font-size:10px}
+.st-cap{display:flex;gap:12px;align-items:flex-start;margin-top:12px;min-height:76px}
+.st-dots{display:flex;flex-direction:column;gap:6px;padding-top:6px}
+.st-dots i{width:9px;height:9px;border-radius:50%;background:var(--line);transition:background .2s}
+.st-dots i.on{background:var(--accent)}
+.st-cap p{margin:0;font-size:16px;line-height:1.45}
+.st-cap b{display:block;font-size:17px}
+.st-cap span{color:var(--muted)}
+.fld{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-top:14px}
+.fld div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
+.fld small{display:block;color:var(--muted);font-size:13px}
+.fld b{font-size:16px}
 </style>
 </head>
 <body>
@@ -127,7 +197,6 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
     <nav aria-label="Main">
       <a href="#how">How it works</a>
       <a href="#demo">Live demo</a>
-      <a href="#screens">Screens</a>
       <a href="#hardware">Hardware</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">Questions</a>
@@ -145,15 +214,67 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
     <div>
       <p class="eyebrow">Point of sale for Kenyan businesses</p>
       <h1>Run your shop from one simple screen.</h1>
-      <p class="lead">Scan or tap to sell. Stock goes down by itself. At the end of the week you see what sold, what is running low and which branch did best. It runs on a tablet, a laptop or a phone.</p>
+      <p class="lead">Scan or tap to sell. Stock goes down by itself. Your stats update live, so every day you see what sold, what is running low and which branch did best. It runs on a tablet, a laptop or a phone.</p>
       <div class="row">
         <a class="btn primary" href="https://wa.me/254141025616?text=Hello%2C%20I%20would%20like%20a%20demo%20of%20Uzaa%20POS." rel="noopener">Book a demo</a>
         <a class="btn" href="#demo">Try it live</a>
       </div>
     </div>
-    <div class="shots">
-      <div class="tablet"><img src="img/sell-tablet.webp" width="1100" height="1074" alt="The Uzaa sell screen on a tablet, with products on the left and the current sale on the right" fetchpriority="high"></div>
-      <div class="phone"><img src="img/sell-phone.webp" width="390" height="820" alt="The same sell screen on a phone"></div>
+    <div class="story" id="story" data-mode="wide">
+      <div class="st-wrap" role="img" aria-label="Animation of a sale. Items are scanned on a tablet, the customer pays by M-Pesa, the receipt prints, and the owner sees the sale appear live on their phone.">
+        <div class="st-stage" aria-hidden="true">
+          <div class="st-grp">
+            <div class="st-tablet"><div class="st-scr">
+              <div class="st-bar"><b>Uzaa</b><span>Mama Njeri Stores / Tom Mboya Branch</span></div>
+              <div class="st-body">
+                <div class="st-tiles">
+                  <div class="st-tile">Maize flour 2kg<i>KES 150</i></div>
+                  <div class="st-tile">Sugar 1kg<i>KES 180</i></div>
+                  <div class="st-tile">Fresh milk 500ml<i>KES 60</i></div>
+                  <div class="st-tile">Bread 400g<i>KES 65</i></div>
+                  <div class="st-tile">Cooking oil 1L<i>KES 330</i></div>
+                  <div class="st-tile">Tea leaves 250g<i>KES 130</i></div>
+                </div>
+                <div class="st-cart">
+                  <h4>Current sale</h4>
+                  <div class="st-lines"><div class="st-empty">Scan or tap an item to start.</div></div>
+                  <div class="st-pay"><span>Cash</span><span>M-Pesa</span><span>Card</span></div>
+                  <div class="st-total"><span>Total</span><b>0</b></div>
+                  <div class="st-charge">Charge</div>
+                </div>
+              </div>
+              <div class="st-done"><s></s>Sale saved</div>
+            </div></div>
+            <div class="st-printer">THERMAL PRINTER<div class="st-led"></div></div>
+            <div class="st-pw"><div class="st-rc">
+              <div class="c"><b>MAMA NJERI STORES</b></div><div class="c">Tom Mboya Branch</div><div class="c">Receipt TM-000412</div><div class="c">8 Oct 2026 14:32</div><hr>
+              <div><span>Maize flour 2kg</span><span>150</span></div><div><span>Sugar 1kg</span><span>180</span></div><div><span>Fresh milk 500ml x2</span><span>120</span></div><div><span>Bread 400g</span><span>65</span></div><hr>
+              <div class="t"><span>TOTAL</span><span>KES 515</span></div><div><span>Paid by</span><span>M-Pesa</span></div><hr><div class="c">Asante, karibu tena!</div>
+            </div></div>
+            <div class="st-dim"></div>
+            <div class="st-show"><div class="st-rc">
+              <div class="c"><b>MAMA NJERI STORES</b></div><div class="c">Tom Mboya Branch</div><div class="c">Receipt TM-000412</div><div class="c">8 Oct 2026 14:32</div><hr>
+              <div><span>Maize flour 2kg</span><span>150</span></div><div><span>Sugar 1kg</span><span>180</span></div><div><span>Fresh milk 500ml x2</span><span>120</span></div><div><span>Bread 400g</span><span>65</span></div><hr>
+              <div class="t"><span>TOTAL</span><span>KES 515</span></div><div><span>Paid by</span><span>M-Pesa</span></div><hr><div class="c">Asante, karibu tena!</div>
+            </div></div>
+          </div>
+          <div class="st-phone"><div class="st-ps">
+            <div class="st-toast">New sale: KES 515<small>Tom Mboya, M-Pesa</small></div>
+            <div class="st-ph"><b>Uzaa</b><span>Owner</span></div>
+            <div class="st-lab">Today, all branches</div>
+            <div class="st-big">KES <span id="st-tot">18,240</span></div>
+            <div class="st-sub"><i></i><span id="st-cnt">41</span> sales, live</div>
+            <div class="st-chart"><span style="height:48%"></span><span style="height:62%"></span><span style="height:71%"></span><span style="height:58%"></span><span style="height:80%"></span><span style="height:66%"></span><span style="height:55%"></span></div>
+            <div class="st-lab" style="margin-top:2px">Latest sales</div>
+            <div class="st-sales">
+              <div class="st-row"><b>Tom Mboya</b><span>Cash &middot; 14:21</span><em>240</em></div>
+              <div class="st-row"><b>Westlands</b><span>M-Pesa &middot; 14:09</span><em>1,180</em></div>
+              <div class="st-row"><b>Tom Mboya</b><span>Card &middot; 13:58</span><em>620</em></div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+      <div class="st-cap"><div class="st-dots"><i class="on"></i><i></i><i></i><i></i></div><p><b id="st-capt">Scan or tap</b><span id="st-capp">Scan the barcode or tap the item. The sale builds up on the right.</span></p></div>
     </div>
   </div>
   <div class="wrap">
@@ -183,33 +304,11 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
   <div class="wrap">
     <p class="eyebrow">Live demo</p>
     <h2>Try Uzaa right here.</h2>
-    <p class="muted" style="max-width:42em">This is a working copy with sample data. Sell something, watch the stock drop, open the weekly report, then switch to the cashier view. Nothing is saved, and a refresh starts again.</p>
+    <p class="muted" style="max-width:42em">This is a working copy with sample data. Sell something, watch the stock drop, open the report, then switch to the cashier view. Nothing is saved, and a refresh starts again.</p>
     <div id="dm-root" class="dm-mount" style="margin-top:22px">
       <div class="dm-ph"><p>The live demo loads as you scroll. If it does not appear, press the button.</p><button type="button" class="btn primary" id="dm-start">Start the demo</button></div>
     </div>
     <noscript><p class="muted">The live demo needs JavaScript. Message us on WhatsApp and we will show you on a call.</p></noscript>
-  </div>
-</section>
-
-<section id="screens" class="sep">
-  <div class="wrap">
-    <p class="eyebrow">Every screen</p>
-    <h2>This is exactly what your team will see.</h2>
-    <p class="muted" style="max-width:40em">Clean, large and quick. Tap any picture to see the full screen. These screenshots use sample data from a made-up shop.</p>
-    <div class="gallery" style="margin-top:22px">
-      <a class="shot" href="img/signup.webp" target="_blank" rel="noopener"><img src="img/signup-thumb.webp" width="720" height="480" loading="lazy" alt="Sign-up screen"><span><b>Create your account</b><small>Business name, type, your name, email and password.</small></span></a>
-      <a class="shot" href="img/login.webp" target="_blank" rel="noopener"><img src="img/login-thumb.webp" width="720" height="391" loading="lazy" alt="Sign-in screen"><span><b>Sign in</b><small>Owners, managers and cashiers each sign in with their own email.</small></span></a>
-      <a class="shot" href="img/sell.webp" target="_blank" rel="noopener"><img src="img/sell-thumb.webp" width="720" height="480" loading="lazy" alt="Sell screen with products and the current sale"><span><b>Sell</b><small>Scan or tap. Change quantity, add a discount, pick how they pay.</small></span></a>
-      <a class="shot narrow" href="img/receipt.webp" target="_blank" rel="noopener"><img src="img/receipt-thumb.webp" width="360" height="418" loading="lazy" alt="Receipt ready to print"><span><b>Receipt</b><small>Your name, address and message. Print it, or switch on automatic printing.</small></span></a>
-      <a class="shot" href="img/products.webp" target="_blank" rel="noopener"><img src="img/products-thumb.webp" width="720" height="480" loading="lazy" alt="Product list"><span><b>Products</b><small>Prices, barcodes and categories. Hide a product without losing its history.</small></span></a>
-      <a class="shot" href="img/product-form.webp" target="_blank" rel="noopener"><img src="img/product-form-thumb.webp" width="720" height="480" loading="lazy" alt="Add product form"><span><b>Add a product</b><small>One form, with your own extra fields such as brand or expiry date.</small></span></a>
-      <a class="shot" href="img/stock.webp" target="_blank" rel="noopener"><img src="img/stock-thumb.webp" width="720" height="480" loading="lazy" alt="Stock levels for a branch"><span><b>Stock</b><small>What is on the shelf in each branch, low-stock warnings and the value of your stock.</small></span></a>
-      <a class="shot" href="img/sales.webp" target="_blank" rel="noopener"><img src="img/sales-thumb.webp" width="720" height="464" loading="lazy" alt="Sales for the day"><span><b>Sales</b><small>Every sale of the day. Open any one to reprint the receipt.</small></span></a>
-      <a class="shot" href="img/reports.webp" target="_blank" rel="noopener"><img src="img/reports-thumb.webp" width="720" height="480" loading="lazy" alt="Weekly report with revenue, profit and best sellers"><span><b>Weekly report</b><small>Revenue, profit, best sellers, and results by branch, payment method and cashier.</small></span></a>
-      <a class="shot" href="img/branches.webp" target="_blank" rel="noopener"><img src="img/branches-thumb.webp" width="720" height="317" loading="lazy" alt="Branches list"><span><b>Branches</b><small>Add a branch. Its address prints on its receipts.</small></span></a>
-      <a class="shot" href="img/staff.webp" target="_blank" rel="noopener"><img src="img/staff-thumb.webp" width="720" height="391" loading="lazy" alt="Staff list"><span><b>Staff</b><small>Add cashiers and managers, move them between branches, switch them off when they leave.</small></span></a>
-      <a class="shot" href="img/settings.webp" target="_blank" rel="noopener"><img src="img/settings-thumb.webp" width="720" height="480" loading="lazy" alt="Settings screen"><span><b>Settings</b><small>Tax, payment methods, receipt text and extra product fields.</small></span></a>
-    </div>
   </div>
 </section>
 
@@ -243,9 +342,7 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
         <li>Put your address, PIN and a thank-you message on every receipt</li>
       </ul>
     </div>
-    <div class="card">
-      <a href="img/settings.webp" target="_blank" rel="noopener"><img src="img/settings-thumb.webp" width="720" height="480" loading="lazy" alt="Settings screen with extra product fields" style="border-radius:10px;border:1px solid var(--line)"></a>
-    </div>
+    <div class="card"><p class="eyebrow" style="margin-bottom:6px">Example: a pharmacy</p><h3>Add a medicine</h3><div class="fld"><div><small>Medicine</small><b>Amoxicillin 500mg</b></div><div><small>Price</small><b>KES 450</b></div><div><small>Expiry date</small><b>30 Jun 2027</b></div><div><small>Batch number</small><b>AX-2291</b></div></div><p class="muted" style="margin:14px 0 0;font-size:15px">The expiry date and batch number are extra fields this shop added itself.</p></div>
   </div>
 </section>
 
@@ -288,7 +385,7 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
           <li>Selling with scanner and receipt printing</li>
           <li>Products and stock per branch</li>
           <li>Branches and staff roles</li>
-          <li>Weekly reports</li>
+          <li>Daily reports, live stats</li>
           <li>Settings to fit your business</li>
           <li>Payments recorded at the till</li>
         </ul>
@@ -347,9 +444,91 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
 <footer>
   <div class="wrap">
     <p><b style="color:var(--ink)">Uzaa</b> is made by The Biziirise Solutions, Norfolk Towers, Kijabe Street, Block G, Nairobi.<br>Phone +254 141 025 616 &middot; <a href="mailto:hello@biziirise.com">hello@biziirise.com</a></p>
-    <p style="margin:0">Screenshots show sample data from a made-up shop. Prices are in Kenya shillings.</p>
+    <p style="margin:0">Prices are in Kenya shillings.</p>
   </div>
 </footer>
+
+<script>
+(function(){
+  var root=document.getElementById('story');if(!root)return;
+  var wrap=root.querySelector('.st-wrap'),stage=root.querySelector('.st-stage'),grp=root.querySelector('.st-grp');
+  var $=function(s){return root.querySelector(s)};
+  var lines=$('.st-lines'),tiles=root.querySelectorAll('.st-tile'),pays=root.querySelectorAll('.st-pay span'),
+      tot=$('.st-total b'),chg=$('.st-charge'),done=$('.st-done'),led=$('.st-led'),rc=$('.st-pw .st-rc'),pw=$('.st-pw'),
+      show=$('.st-show'),dim=$('.st-dim'),phone=$('.st-phone'),toast=$('.st-toast'),big=$('#st-tot'),cnt=$('#st-cnt'),
+      bar=$('.st-chart span:last-child'),sales=$('.st-sales'),capT=$('#st-capt'),capP=$('#st-capp'),dots=root.querySelectorAll('.st-dots i');
+  var CAP=[
+    ['Scan or tap','Scan the barcode or tap the item. The sale builds up on the right.'],
+    ['Take payment','Choose cash, M-Pesa or card, then tap Charge. Stock goes down by itself.'],
+    ['Print the receipt','The receipt prints on your thermal printer the moment you charge.'],
+    ['See it on your phone','The sale shows up live. Your stats update the moment you sell, so your report is ready every day.']
+  ];
+  var ITEMS=[[0,'Maize flour 2kg',150],[1,'Sugar 1kg',180],[2,'Fresh milk 500ml',60],[2,'Fresh milk 500ml x2',120],[3,'Bread 400g',65]];
+  var timers=[],running=false,mode='wide',reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function T(ms,f){timers.push(setTimeout(f,ms))}
+  function clear(){timers.forEach(clearTimeout);timers=[]}
+  function fmt(n){return n.toLocaleString('en-KE')}
+  function setStep(i){capT.textContent=CAP[i][0];capP.textContent=CAP[i][1];dots.forEach(function(d,k){d.className=k===i?'on':''})}
+  function fit(){
+    var w=wrap.clientWidth;mode=w<520?'narrow':'wide';root.setAttribute('data-mode',mode);
+    var dw=mode==='wide'?560:360,k=Math.min(w/dw,1.2);
+    stage.style.transform='scale('+k+')';stage.style.left=Math.max(0,(w-dw*k)/2)+'px';wrap.style.height=Math.round(585*k)+'px';
+  }
+  function num(el,a,b,d){var s=performance.now();(function f(t){var p=Math.min(1,(t-s)/d);el.textContent=fmt(Math.round(a+(b-a)*p));if(p<1)requestAnimationFrame(f)})(s)}
+  function addLine(it){
+    var e=lines.querySelector('.st-empty');if(e)e.remove();
+    var n=lines.querySelectorAll('.st-line');
+    if(it[1].indexOf(' x2')>0&&n.length){n[n.length-1].remove()}
+    var d=document.createElement('div');d.className='st-line new';d.innerHTML='<span>'+it[1]+'</span><b>'+it[2]+'</b>';lines.appendChild(d);
+    tiles.forEach(function(t){t.classList.remove('hit')});tiles[it[0]].classList.add('hit');
+  }
+  function reset(){
+    lines.innerHTML='<div class="st-empty">Scan or tap an item to start.</div>';
+    tiles.forEach(function(t){t.classList.remove('hit')});pays.forEach(function(p){p.classList.remove('on')});
+    tot.textContent='0';chg.classList.remove('press');done.classList.remove('on');led.classList.remove('on');
+    rc.style.transition='none';rc.style.transform='translateY(-102%)';pw.classList.remove('gone');
+    show.classList.remove('on');dim.classList.remove('on');grp.classList.remove('out');phone.classList.remove('in');toast.classList.remove('on');
+    big.textContent='18,240';cnt.textContent='41';bar.style.height='55%';
+    var f=sales.querySelector('.fresh');if(f)f.remove();setStep(0);
+  }
+  function play(){
+    clear();reset();running=true;
+    var run=0;
+    ITEMS.forEach(function(it,i){var at=900+i*800;T(at,function(){addLine(it);run=(i<3?[150,330,390][i]:i===3?450:515);tot.textContent=run})});
+    T(4700,function(){setStep(1);pays[1].classList.add('on')});
+    T(5700,function(){chg.classList.add('press')});
+    T(5900,function(){chg.classList.remove('press');done.classList.add('on')});
+    T(6700,function(){done.classList.remove('on');setStep(2);led.classList.add('on');rc.style.transition='transform 2300ms steps(18,end)';rc.style.transform='translateY(0)'});
+    T(9100,function(){led.classList.remove('on');dim.classList.add('on');show.classList.add('on');pw.classList.add('gone')});
+    T(11600,function(){show.classList.remove('on');dim.classList.remove('on')});
+    T(12000,function(){
+      setStep(3);if(mode==='narrow'){grp.classList.add('out');phone.classList.add('in')}
+    });
+    T(12700,function(){
+      toast.classList.add('on');num(big,18240,18755,1000);num(cnt,41,42,700);bar.style.height='88%';
+      var r=document.createElement('div');r.className='st-row fresh';r.innerHTML='<b>Tom Mboya</b><span>M-Pesa &middot; 14:32</span><em>515</em>';sales.insertBefore(r,sales.firstChild);
+    });
+    T(14900,function(){toast.classList.remove('on')});
+    T(16400,function(){stage.classList.add('fade')});
+    T(16800,function(){stage.classList.remove('fade');play()});
+  }
+  function still(){
+    clear();reset();ITEMS.forEach(function(it){addLine(it)});tot.textContent='515';pays[1].classList.add('on');
+    rc.style.transition='none';rc.style.transform='translateY(0)';tiles.forEach(function(t){t.classList.remove('hit')});
+    big.textContent='18,755';cnt.textContent='42';bar.style.height='88%';
+    var r=document.createElement('div');r.className='st-row fresh';r.innerHTML='<b>Tom Mboya</b><span>M-Pesa &middot; 14:32</span><em>515</em>';sales.insertBefore(r,sales.firstChild);
+    capT.textContent='Scan, pay, print';capP.textContent='Then see the sale on your phone, live. Your stats update the moment you sell, so your report is ready every day.';
+    dots.forEach(function(d){d.className='on'});
+  }
+  fit();
+  if(window.ResizeObserver)new ResizeObserver(fit).observe(wrap);else addEventListener('resize',fit);
+  if(reduce){still();return}
+  var vis=false;
+  function ctl(){if(vis&&!document.hidden){if(!running)play()}else{running=false;clear()}}
+  if('IntersectionObserver' in window)new IntersectionObserver(function(e){vis=e[0].isIntersecting;ctl()},{threshold:.2}).observe(root);else{vis=true;ctl()}
+  document.addEventListener('visibilitychange',ctl);
+})();
+</script>
 
 <script>
 (function(){
