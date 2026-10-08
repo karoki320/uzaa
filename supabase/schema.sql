@@ -249,9 +249,9 @@ begin
     (select count(*) from branches x where x.business_id = b.id),
     (select count(*) from profiles x where x.business_id = b.id),
     (select count(*) from sales s where s.business_id = b.id),
-    (select coalesce(sum(total),0) from sales s where s.business_id = b.id and s.created_at > now() - interval '7 days'),
-    (select max(created_at) from sales s where s.business_id = b.id),
-    (select email from profiles p where p.business_id = b.id and p.role = 'owner' limit 1)
+    (select coalesce(sum(s.total),0) from sales s where s.business_id = b.id and s.created_at > now() - interval '7 days'),
+    (select max(s.created_at) from sales s where s.business_id = b.id),
+    (select p.email from profiles p where p.business_id = b.id and p.role = 'owner' limit 1)
   from businesses b order by b.created_at desc;
 end $$;
 
