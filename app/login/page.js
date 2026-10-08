@@ -18,7 +18,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
     if (error) return setErr(error.message);
-    router.replace('/');
+    router.replace('/home');
   }
 
   return (

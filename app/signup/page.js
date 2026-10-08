@@ -16,7 +16,7 @@ export default function Signup() {
 
   if (loading) return <div className="center">Loading...</div>;
   if (session && profile) {
-    router.replace('/');
+    router.replace('/home');
     return null;
   }
 

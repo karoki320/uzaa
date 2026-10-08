@@ -1,2 +1,9 @@
 /** @type {import('next').NextConfig} */
-module.exports = { reactStrictMode: true };
+module.exports = {
+  reactStrictMode: true,
+  async rewrites() {
+    return {
+      beforeFiles: [{ source: '/', destination: '/landing.html' }],
+    };
+  },
+};
