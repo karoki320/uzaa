@@ -82,7 +82,7 @@ export default function Staff() {
                   <td className="right">
                     {!me && (
                       <>
-                        <button className="btn small" onClick={() => { const p = window.prompt('New password (at least 6 characters)'); if (p) patch(r.id, { password: p }); }}>Reset password</button>{' '}
+                        <button className="btn small" onClick={() => { const p = window.prompt('New password (at least 8 characters)'); if (p) patch(r.id, { password: p }); }}>Reset password</button>{' '}
                         <button className={`btn small ${r.active ? 'danger' : ''}`} onClick={() => patch(r.id, { active: !r.active })}>{r.active ? 'Disable' : 'Enable'}</button>
                       </>
                     )}
@@ -100,7 +100,7 @@ export default function Staff() {
           <form onSubmit={create}>
             <label className="field"><span>Full name</span><input className="input" required value={add.full_name} onChange={(e) => setAdd({ ...add, full_name: e.target.value })} /></label>
             <label className="field"><span>Email (their login)</span><input className="input" type="email" required value={add.email} onChange={(e) => setAdd({ ...add, email: e.target.value })} /></label>
-            <label className="field"><span>Password (give it to them)</span><input className="input" required minLength={6} value={add.password} onChange={(e) => setAdd({ ...add, password: e.target.value })} /></label>
+            <label className="field"><span>Password (give it to them)</span><input className="input" required minLength={8} value={add.password} onChange={(e) => setAdd({ ...add, password: e.target.value })} /></label>
             <div className="row">
               <label className="field grow"><span>Role</span>
                 <select className="input" value={add.role} onChange={(e) => setAdd({ ...add, role: e.target.value })}>

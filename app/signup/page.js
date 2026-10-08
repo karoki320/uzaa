@@ -26,7 +26,7 @@ export default function Signup() {
     setBusy(true);
     try {
       if (!session) {
-        if (f.password.length < 6) throw new Error('Password must be at least 6 characters');
+        if (f.password.length < 8) throw new Error('Password must be at least 8 characters');
         const { data, error } = await supabase.auth.signUp({ email: f.email.trim(), password: f.password });
         if (error) throw error;
         if (!data.session) {
