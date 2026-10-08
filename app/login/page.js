@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Logo from '@/components/Logo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -23,7 +24,7 @@ export default function Login() {
 
   return (
     <div className="auth">
-      <div className="brand" style={{ fontSize: 32, marginBottom: 4 }}>Uzaa</div>
+      <div style={{ marginBottom: 8 }}><Logo height={44} /></div>
       <p className="muted">Sign in to your point of sale.</p>
       <form onSubmit={submit} className="card">
         <label className="field">

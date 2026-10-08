@@ -1,5 +1,6 @@
 'use client';
 import { useEffect } from 'react';
+import Logo from '@/components/Logo';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -61,7 +62,7 @@ export default function Shell({ children }) {
     <>
       <div className="shell-head no-print">
         <div>
-          <span className="brand">Uzaa</span>
+          <span className="brand" aria-label="Uzaa"><Logo height={30} /></span>
           {business && <span className="muted small"> &nbsp;{business.name}{myBranch ? ` / ${myBranch.name}` : ''}</span>}
         </div>
         <div className="row">

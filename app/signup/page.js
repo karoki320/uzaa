@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Logo from '@/components/Logo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +13,7 @@ export default function Signup() {
   const [f, setF] = useState({ full_name: '', email: '', password: '', business: '', type: 'retail' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   if (loading) return <div className="center">Loading...</div>;
@@ -31,7 +33,11 @@ export default function Signup() {
         if (error) throw error;
         if (!data.session) {
           const { error: e2 } = await supabase.auth.signInWithPassword({ email: f.email.trim(), password: f.password });
-          if (e2) throw new Error('Account created, but email confirmation is switched on in Supabase. Turn off "Confirm email" under Authentication > Providers > Email, then sign in.');
+          if (e2) {
+            setNotice(`We sent a confirmation link to ${f.email.trim()}. Open it, then sign in to finish setting up your business.`);
+            setBusy(false);
+            return;
+          }
         }
       }
       const preset = TYPE_PRESETS[f.type];
@@ -54,7 +60,7 @@ export default function Signup() {
 
   return (
     <div className="auth">
-      <div className="brand" style={{ fontSize: 32, marginBottom: 4 }}>Uzaa</div>
+      <div style={{ marginBottom: 8 }}><Logo height={44} /></div>
       <p className="muted">Set up your business and start selling today.</p>
       <form onSubmit={submit} className="card">
         <label className="field">
@@ -84,6 +90,7 @@ export default function Signup() {
           </>
         )}
         {err && <div className="err">{err}</div>}
+        {notice && <div className="card" role="status" style={{ marginBottom: 12 }}>{notice}</div>}
         <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Setting up...' : 'Create my business'}</button>
       </form>
       <p className="muted">Already have an account? <Link href="/login">Sign in</Link></p>
