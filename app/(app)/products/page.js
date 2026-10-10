@@ -2,16 +2,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { money } from '@/lib/util';
+import { money, UNITS } from '@/lib/util';
 import Modal from '@/components/Modal';
 
-const blank = { name: '', barcode: '', category: '', price: '', cost: '', track_stock: true, low_stock_level: 5, custom: {}, opening: '' };
+const blank = { name: '', barcode: '', category: '', unit: 'pc', price: '', cost: '', track_stock: true, low_stock_level: 5, custom: {}, opening: '' };
 
 export default function Products() {
   const { business, branches, profile } = useAuth();
   const label = business.item_label || 'Product';
   const fields = business.custom_fields || [];
   const [rows, setRows] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [newCat, setNewCat] = useState('');
+  const barcodeOn = business.barcode_enabled !== false;
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState(null);
   const [branchId, setBranchId] = useState(profile.branch_id || branches[0]?.id);
@@ -23,6 +26,11 @@ export default function Products() {
     setRows(data || []);
   }, []);
   useEffect(() => { load(); }, [load]);
+  const loadCats = useCallback(async () => {
+    const { data } = await supabase.from('categories').select('*').order('name').range(0, 999);
+    setCats(data || []);
+  }, []);
+  useEffect(() => { loadCats(); }, [loadCats]);
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -33,10 +41,21 @@ export default function Products() {
     e.preventDefault();
     setErr('');
     setBusy(true);
+    let category = (edit.category || '').trim();
+    if (category === '__new') {
+      category = newCat.trim().slice(0, 60);
+      if (category && !cats.some((c) => c.name.toLowerCase() === category.toLowerCase())) {
+        const { error: ce } = await supabase.from('categories').insert({ business_id: business.id, name: category });
+        if (ce && !ce.message.includes('categories_biz_name')) { setBusy(false); return setErr(ce.message); }
+      }
+      loadCats();
+    }
+    const unit = (edit.unit || 'pc').trim().toLowerCase().slice(0, 20) || 'pc';
     const payload = {
       name: edit.name.trim(),
-      barcode: edit.barcode?.trim() || null,
-      category: edit.category?.trim() || '',
+      barcode: barcodeOn ? edit.barcode?.trim() || null : edit.barcode?.trim() || null,
+      category,
+      unit,
       price: Number(edit.price) || 0,
       cost: Number(edit.cost) || 0,
       track_stock: !!edit.track_stock,
@@ -57,6 +76,7 @@ export default function Products() {
     setBusy(false);
     if (error) return setErr(error.message.includes('products_barcode_uq') ? 'That barcode is already used by another item' : error.message);
     setEdit(null);
+    setNewCat('');
     load();
   }
 
@@ -65,6 +85,7 @@ export default function Products() {
     load();
   }
 
+  const unitName = edit?.unit || 'unit';
   const set = (k) => (e) => setEdit({ ...edit, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const setCustom = (k) => (e) => setEdit({ ...edit, custom: { ...edit.custom, [k]: e.target.value } });
 
@@ -74,19 +95,19 @@ export default function Products() {
         <div><h1>{label}s</h1><div className="muted small">{rows.length} in catalogue</div></div>
         <button className="btn primary" onClick={() => setEdit({ ...blank })}>Add {label.toLowerCase()}</button>
       </div>
-      <input className="input" placeholder="Search by name, barcode or category" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 12 }} />
+      <input className="input" placeholder={barcodeOn ? 'Search by name, barcode or category' : 'Search by name or category'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 12 }} />
       <div className="card table-wrap">
         <table>
           <thead>
-            <tr><th>Name</th><th>Barcode</th><th>Category</th><th className="num">Price</th><th className="num">Cost</th><th>Status</th><th></th></tr>
+            <tr><th>Name</th>{barcodeOn && <th>Barcode</th>}<th>Category</th><th className="num">Price</th><th className="num">Cost</th><th>Status</th><th></th></tr>
           </thead>
           <tbody>
             {shown.map((p) => (
               <tr key={p.id}>
                 <td><b>{p.name}</b></td>
-                <td>{p.barcode || '-'}</td>
+                {barcodeOn && <td>{p.barcode || '-'}</td>}
                 <td>{p.category || '-'}</td>
-                <td className="num">{money(p.price, business.currency)}</td>
+                <td className="num">{money(p.price, business.currency)}<span className="muted small"> / {p.unit || 'pc'}</span></td>
                 <td className="num">{money(p.cost, business.currency)}</td>
                 <td>{p.active ? <span className="badge">Active</span> : <span className="badge red">Hidden</span>}</td>
                 <td className="right">
@@ -95,7 +116,7 @@ export default function Products() {
                 </td>
               </tr>
             ))}
-            {shown.length === 0 && <tr><td colSpan="7" className="muted">Nothing here yet.</td></tr>}
+            {shown.length === 0 && <tr><td colSpan="8" className="muted">Nothing here yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -104,11 +125,32 @@ export default function Products() {
         <Modal title={edit.id ? `Edit ${label.toLowerCase()}` : `Add ${label.toLowerCase()}`} onClose={() => setEdit(null)}>
           <form onSubmit={save}>
             <label className="field"><span>Name</span><input className="input" required value={edit.name} onChange={set('name')} /></label>
-            <label className="field"><span>Barcode (scan it here)</span><input className="input" value={edit.barcode || ''} onChange={set('barcode')} /></label>
-            <label className="field"><span>Category</span><input className="input" value={edit.category || ''} onChange={set('category')} /></label>
+            {barcodeOn && <label className="field"><span>Barcode (scan it here)</span><input className="input" value={edit.barcode || ''} onChange={set('barcode')} /></label>}
             <div className="row">
-              <label className="field grow"><span>Selling price</span><input className="input" required inputMode="decimal" value={edit.price} onChange={set('price')} /></label>
-              <label className="field grow"><span>Cost price</span><input className="input" inputMode="decimal" value={edit.cost} onChange={set('cost')} /></label>
+              <label className="field grow"><span>Category</span>
+                <select className="input" value={edit.category || ''} onChange={set('category')}>
+                  <option value="">No category</option>
+                  {edit.category && edit.category !== '__new' && !cats.some((c) => c.name === edit.category) && <option value={edit.category}>{edit.category}</option>}
+                  {cats.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  <option value="__new">+ New category...</option>
+                </select>
+              </label>
+              <label className="field grow"><span>Sold by (unit)</span>
+                <select className="input" value={UNITS.some((u) => u[0] === edit.unit) ? edit.unit : '__custom'} onChange={(e) => setEdit({ ...edit, unit: e.target.value === '__custom' ? '' : e.target.value })}>
+                  {UNITS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  <option value="__custom">Other...</option>
+                </select>
+              </label>
+            </div>
+            {edit.category === '__new' && (
+              <label className="field"><span>New category name</span><input className="input" required maxLength={60} value={newCat} onChange={(e) => setNewCat(e.target.value)} /></label>
+            )}
+            {!UNITS.some((u) => u[0] === edit.unit) && (
+              <label className="field"><span>Custom unit (for example tray, sachet, roll)</span><input className="input" required maxLength={20} value={edit.unit || ''} onChange={set('unit')} /></label>
+            )}
+            <div className="row">
+              <label className="field grow"><span>Selling price (per {unitName})</span><input className="input" required inputMode="decimal" value={edit.price} onChange={set('price')} /></label>
+              <label className="field grow"><span>Cost price (per {unitName})</span><input className="input" inputMode="decimal" value={edit.cost} onChange={set('cost')} /></label>
             </div>
             {fields.map((f) => (
               <label className="field" key={f.key}>

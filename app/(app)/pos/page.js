@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { money, num } from '@/lib/util';
+import { money, num, stepFor } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
 import PrintButtons from '@/components/PrintButtons';
@@ -23,7 +23,10 @@ export default function POS() {
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
   const [auto, setAuto] = useState(false);
+  const [flash, setFlash] = useState(null);
   const input = useRef(null);
+  const mode = business.receipt_mode || 'always';
+  const barcodeOn = business.barcode_enabled !== false;
   const label = business.item_label || 'Product';
 
   useEffect(() => {
@@ -55,8 +58,9 @@ export default function POS() {
   function add(p) {
     setCart((c) => {
       const i = c.findIndex((x) => x.id === p.id);
-      if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: x.qty + 1 } : x));
-      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: 1, track: p.track_stock }];
+      if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: Math.round((x.qty + stepFor(x.unit)) * 1000) / 1000, qs: undefined } : x));
+      const unit = p.unit || 'pc';
+      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: stepFor(unit) === 1 ? 1 : 1, unit, track: p.track_stock }];
     });
     setErr('');
   }
@@ -72,10 +76,13 @@ export default function POS() {
     setErr(`No exact match for "${t}"`);
   }
 
-  const setQty = (id, d) =>
-    setCart((c) => c.map((x) => (x.id === id ? { ...x, qty: Math.max(0, x.qty + d) } : x)).filter((x) => x.qty > 0));
-  const typeQty = (id, v) =>
-    setCart((c) => c.map((x) => (x.id === id ? { ...x, qty: Math.max(0, Number(v) || 0) } : x)));
+  const setQty = (id, dir) =>
+    setCart((c) => c.map((x) => (x.id === id ? { ...x, qty: Math.max(0, Math.round((x.qty + dir * stepFor(x.unit)) * 1000) / 1000), qs: undefined } : x)).filter((x) => x.qty > 0));
+  // keeps what is typed as text so "0." and "0.5" can be entered
+  const typeQty = (id, v) => {
+    if (!/^\d*\.?\d{0,3}$/.test(v)) return;
+    setCart((c) => c.map((x) => (x.id === id ? { ...x, qs: v, qty: Number(v) || 0 } : x)));
+  };
 
   const sub = cart.reduce((s, c) => s + c.qty * c.price, 0);
   const disc = Math.min(Number(discount) || 0, sub);
@@ -104,10 +111,17 @@ export default function POS() {
     if (error) { setBusy(false); return setErr(error.message); }
     const { data: sale } = await supabase.from('sales').select('*').eq('id', id).single();
     setBusy(false);
-    setDone({ sale, items: items.map((c) => ({ name: c.name, qty: c.qty, price: c.price })) });
+    const lines = items.map((c) => ({ name: c.name, qty: c.qty, price: c.price, unit: c.unit }));
     setCart([]); setDiscount(''); setPaid(''); setQ('');
     loadStock();
-    if (auto) setTimeout(() => window.print(), 400);
+    if (mode === 'never') {
+      setFlash({ no: sale.receipt_no, total: sale.total, change: Math.max(0, Number(sale.amount_paid || 0) - Number(sale.total || 0)) });
+      setTimeout(() => setFlash(null), 8000);
+      setTimeout(() => input.current?.focus(), 50);
+      return;
+    }
+    setDone({ sale, items: lines, show: mode === 'always' });
+    if (mode === 'always' && auto) setTimeout(() => window.print(), 400);
   }
 
   function closeReceipt() {
@@ -136,7 +150,7 @@ export default function POS() {
               autoFocus
               className="input grow"
               style={{ fontSize: 18 }}
-              placeholder={`Scan barcode or search ${label.toLowerCase()}...`}
+              placeholder={barcodeOn ? `Scan barcode or search ${label.toLowerCase()}...` : `Search ${label.toLowerCase()}...`}
               value={q}
               onChange={(e) => { setQ(e.target.value); setErr(''); }}
               onKeyDown={onSearchKey}
@@ -149,6 +163,11 @@ export default function POS() {
             )}
           </div>
           {err && <div className="err">{err}</div>}
+          {flash && (
+            <div className="note" role="status" style={{ marginTop: 12 }}>
+              <b>Sale #{flash.no} saved.</b> Total {money(flash.total, business.currency)}{flash.change > 0 ? `, change ${money(flash.change, business.currency)}` : ''}.
+            </div>
+          )}
           {products.length === 0 && (
             <div className="tint" style={{ marginTop: 12 }}>
               No {label.toLowerCase()}s yet. {profile.role === 'cashier' ? 'Ask your manager to add some.' : 'Open Products to add your first one.'}
@@ -160,9 +179,9 @@ export default function POS() {
               return (
                 <button key={p.id} className="tile" onClick={() => { add(p); input.current?.focus(); }}>
                   <b>{p.name}</b>
-                  <span className="p">{money(p.price, business.currency)}</span>
+                  <span className="p">{money(p.price, business.currency)}{p.unit && p.unit !== 'pc' ? <span className="s"> / {p.unit}</span> : null}</span>
                   {p.track_stock && (
-                    <div className={`s ${s <= Number(p.low_stock_level) ? 'warn' : ''}`}>{num(s)} in stock</div>
+                    <div className={`s ${s <= Number(p.low_stock_level) ? 'warn' : ''}`}>{num(s)}{p.unit && p.unit !== 'pc' ? ` ${p.unit}` : ''} in stock</div>
                   )}
                 </button>
               );
@@ -177,13 +196,13 @@ export default function POS() {
             <div key={c.id} className="cart-line">
               <div>
                 <b>{c.name}</b>
-                <div className="small muted">{money(c.price, business.currency)} each</div>
-                {c.track && (stock[c.id] ?? 0) < c.qty && <div className="small warn">Only {num(stock[c.id] ?? 0)} in stock</div>}
+                <div className="small muted">{money(c.price, business.currency)} per {c.unit && c.unit !== 'pc' ? c.unit : 'item'}</div>
+                {c.track && (stock[c.id] ?? 0) < c.qty && <div className="small warn">Only {num(stock[c.id] ?? 0)}{c.unit && c.unit !== 'pc' ? ` ${c.unit}` : ''} in stock</div>}
               </div>
               <div className="right">
                 <div className="qty">
                   <button onClick={() => setQty(c.id, -1)} aria-label="Less">-</button>
-                  <input className="input" style={{ width: 64, textAlign: 'center' }} inputMode="decimal" value={c.qty} onChange={(e) => typeQty(c.id, e.target.value)} />
+                  <input className="input" style={{ width: 64, textAlign: 'center' }} inputMode="decimal" value={c.qs ?? c.qty} onChange={(e) => typeQty(c.id, e.target.value)} aria-label={`Quantity${c.unit && c.unit !== 'pc' ? ' in ' + c.unit : ''}`} />
                   <button onClick={() => setQty(c.id, 1)} aria-label="More">+</button>
                 </div>
                 <div><b>{money(c.qty * c.price, business.currency)}</b></div>
@@ -226,14 +245,28 @@ export default function POS() {
 
       {done && (
         <Modal onClose={closeReceipt}>
-          <Receipt business={business} branch={branch} sale={done.sale} items={done.items} cashier={profile.full_name} />
-          <div className="no-print" style={{ marginTop: 16 }}>
-            <label className="row small" style={{ marginBottom: 12 }}>
-              <input type="checkbox" checked={auto} onChange={(e) => toggleAuto(e.target.checked)} /> Print receipt automatically after each sale
-            </label>
-            <PrintButtons saleId={done.sale.id} />
-            <button className="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={closeReceipt}>New sale</button>
-          </div>
+          {done.show ? (
+            <>
+              <Receipt business={business} branch={branch} sale={done.sale} items={done.items} cashier={profile.full_name} />
+              <div className="no-print" style={{ marginTop: 16 }}>
+                {mode === 'always' && (
+                  <label className="row small" style={{ marginBottom: 12 }}>
+                    <input type="checkbox" checked={auto} onChange={(e) => toggleAuto(e.target.checked)} /> Print receipt automatically after each sale
+                  </label>
+                )}
+                <PrintButtons saleId={done.sale.id} />
+                <button className="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={closeReceipt}>New sale</button>
+              </div>
+            </>
+          ) : (
+            <div className="stack no-print">
+              <h2>Sale #{done.sale.receipt_no} saved</h2>
+              <div className="kpi"><div className="l">Total</div><div className="v">{money(done.sale.total, business.currency)}</div></div>
+              {Number(done.sale.amount_paid) > Number(done.sale.total) && <p>Change: <b>{money(Number(done.sale.amount_paid) - Number(done.sale.total), business.currency)}</b></p>}
+              <button className="btn" style={{ width: '100%' }} onClick={() => setDone({ ...done, show: true })}>Print receipt</button>
+              <button className="btn primary" style={{ width: '100%' }} onClick={closeReceipt}>No receipt, new sale</button>
+            </div>
+          )}
         </Modal>
       )}
     </>

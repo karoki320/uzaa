@@ -21,7 +21,7 @@ export default function Receipt({ business, branch, sale, items, cashier }) {
           <div key={i}>
             <div>{it.name}</div>
             <div className="ln">
-              <span>&nbsp;&nbsp;{num(it.qty)} x {num(it.price)}</span>
+              <span>&nbsp;&nbsp;{num(it.qty)}{it.unit && it.unit !== 'pc' ? ` ${it.unit}` : ''} x {num(it.price)}</span>
               <span>{num(it.qty * it.price)}</span>
             </div>
           </div>

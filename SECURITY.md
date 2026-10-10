@@ -47,3 +47,8 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 - Mock-backend tests: cross-origin posts blocked (403), cookie flags HttpOnly + Secure + SameSite=Strict, gateway rejects non-data paths and path tricks (404), unsigned requests (401), cross-origin writes through the gateway (403), lockout after repeated wrong passwords (429), captcha demanded at 3 failures, 2FA prompt for users with it, unconfirmed account message, `/admin` bounced without the second step, signed-out visitors bounced to login, unsafe redirect targets rejected, forgot-password rate limited, weak passwords rejected, logout clears the cookie, auth log holds no raw emails.
 - `npm run build` clean. `npm audit`: 0 vulnerabilities.
 - Not tested against a live Supabase project: run one real signup, reset, invite and 2FA enrolment after deploying.
+
+## Added later: categories, units, exports
+- Excel download of sales: owners and managers only, limited to one year per file and 20 requests an hour, read through the signed-in user's own database permissions (so it can never include another business). Item names that start with "=" are written as plain text, not formulas.
+- Print links for the Bluetooth Print app are signed, tied to one sale, and expire after 30 minutes.
+- `categories` table has row level security: owners and managers of that business only.

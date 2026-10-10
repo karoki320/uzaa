@@ -15,6 +15,11 @@ export default function Sales() {
   const [rows, setRows] = useState([]);
   const [names, setNames] = useState({});
   const [view, setView] = useState(null);
+  const today = isoDate(new Date());
+  const [xf, setXf] = useState(today.slice(0, 8) + '01');
+  const [xt, setXt] = useState(today);
+  const [xb, setXb] = useState('');
+  const xlsxUrl = `/api/export/sales?from=${xf}&to=${xt}${xb ? `&branch=${xb}` : ''}`;
 
   const load = useCallback(async () => {
     const from = new Date(`${day}T00:00:00`);
@@ -37,7 +42,7 @@ export default function Sales() {
   }, [isCashier, profile]);
 
   async function open(s) {
-    const { data } = await supabase.from('sale_items').select('name,qty,price').eq('sale_id', s.id);
+    const { data } = await supabase.from('sale_items').select('name,qty,price,unit').eq('sale_id', s.id);
     setView({ sale: s, items: (data || []).map((i) => ({ ...i, qty: Number(i.qty), price: Number(i.price) })) });
   }
 
@@ -57,6 +62,25 @@ export default function Sales() {
           )}
         </div>
       </div>
+      {!isCashier && (
+        <div className="card no-print">
+          <h3>Download sales as Excel</h3>
+          <div className="row" style={{ alignItems: 'flex-end' }}>
+            <label className="field grow" style={{ marginBottom: 0 }}><span>From</span><input className="input" type="date" value={xf} max={xt} onChange={(e) => setXf(e.target.value)} /></label>
+            <label className="field grow" style={{ marginBottom: 0 }}><span>To</span><input className="input" type="date" value={xt} min={xf} onChange={(e) => setXt(e.target.value)} /></label>
+            {branches.length > 1 && (
+              <label className="field grow" style={{ marginBottom: 0 }}><span>Branch</span>
+                <select className="input" value={xb} onChange={(e) => setXb(e.target.value)}>
+                  <option value="">All branches</option>
+                  {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </label>
+            )}
+            <a className="btn primary" href={xlsxUrl} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Download Excel</a>
+          </div>
+          <p className="muted small" style={{ margin: '8px 0 0' }}>One file with every sale, every item sold, and totals by payment method. Up to one year at a time.</p>
+        </div>
+      )}
       <div className="kpis">
         <div className="kpi"><div className="v">{money(total, business.currency)}</div><div className="l">Total for the day</div></div>
         <div className="kpi"><div className="v">{rows.length}</div><div className="l">Sales</div></div>

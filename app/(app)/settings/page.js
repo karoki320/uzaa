@@ -1,8 +1,83 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { TYPE_PRESETS, slug } from '@/lib/util';
+
+function Categories({ businessId }) {
+  const [rows, setRows] = useState([]);
+  const [name, setName] = useState('');
+  const [edit, setEdit] = useState(null);       // { id, old, name }
+  const [del, setDel] = useState('');
+  const [err, setErr] = useState('');
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('categories').select('*').order('name').range(0, 999);
+    setRows(data || []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  const dup = (n, id) => rows.some((r) => r.id !== id && r.name.toLowerCase() === n.toLowerCase());
+
+  async function add() {
+    const n = name.trim();
+    if (!n) return;
+    setErr('');
+    if (dup(n)) return setErr('That category already exists');
+    const { error } = await supabase.from('categories').insert({ business_id: businessId, name: n.slice(0, 60) });
+    if (error) return setErr(error.message);
+    setName(''); load();
+  }
+  async function rename() {
+    const n = edit.name.trim();
+    if (!n) return;
+    setErr('');
+    if (dup(n, edit.id)) return setErr('That category already exists');
+    const { error } = await supabase.from('categories').update({ name: n.slice(0, 60) }).eq('id', edit.id);
+    if (error) return setErr(error.message);
+    await supabase.from('products').update({ category: n.slice(0, 60) }).eq('category', edit.old);   // items follow the new name
+    setEdit(null); load();
+  }
+  async function remove(r) {
+    setErr('');
+    await supabase.from('products').update({ category: '' }).eq('category', r.name);
+    const { error } = await supabase.from('categories').delete().eq('id', r.id);
+    if (error) return setErr(error.message);
+    setDel(''); load();
+  }
+  const stop = (fn) => (e) => { if (e.key === 'Enter') { e.preventDefault(); fn(); } };
+
+  return (
+    <div className="card">
+      <h3>Categories</h3>
+      <p className="muted small">Group your items, for example Milk, Water, Cooking oil or Soft drinks. They appear as a list when you add or edit an item.</p>
+      {rows.length === 0 && <p className="muted small">No categories yet.</p>}
+      {rows.map((r) => (
+        <div key={r.id} className="row" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+          {edit?.id === r.id ? (
+            <>
+              <input className="input grow" value={edit.name} maxLength={60} autoFocus onChange={(e) => setEdit({ ...edit, name: e.target.value })} onKeyDown={stop(rename)} aria-label="Category name" />
+              <button type="button" className="btn small primary" onClick={rename}>Save</button>
+              <button type="button" className="btn small" onClick={() => setEdit(null)}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <b className="grow">{r.name}</b>
+              <button type="button" className="btn small" onClick={() => { setEdit({ id: r.id, old: r.name, name: r.name }); setDel(''); }}>Rename</button>
+              {del === r.id
+                ? <button type="button" className="btn small danger" onClick={() => remove(r)}>Confirm delete</button>
+                : <button type="button" className="btn small danger" onClick={() => setDel(r.id)}>Delete</button>}
+            </>
+          )}
+        </div>
+      ))}
+      {del && <p className="muted small" style={{ marginTop: 8 }}>Items in this category are kept, they just become uncategorised.</p>}
+      <div className="row" style={{ marginTop: 12 }}>
+        <input className="input grow" placeholder="New category name" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onKeyDown={stop(add)} aria-label="New category name" />
+        <button type="button" className="btn primary" onClick={add}>Add category</button>
+      </div>
+      {err && <div className="err" role="alert">{err}</div>}
+    </div>
+  );
+}
 
 export default function Settings() {
   const { business, reload } = useAuth();
@@ -14,6 +89,8 @@ export default function Settings() {
     tax_rate: business.tax_rate ?? 0,
     receipt_header: business.receipt_header || '',
     receipt_footer: business.receipt_footer || '',
+    receipt_mode: business.receipt_mode || 'always',
+    barcode_enabled: business.barcode_enabled !== false,
     payment_methods: (business.payment_methods || []).join(', '),
   });
   const [fields, setFields] = useState(business.custom_fields || []);
@@ -38,6 +115,7 @@ export default function Settings() {
       name: f.name.trim(), business_type: f.business_type, item_label: f.item_label.trim() || 'Product',
       currency: f.currency.trim() || 'KES', tax_rate: Number(f.tax_rate) || 0,
       receipt_header: f.receipt_header, receipt_footer: f.receipt_footer,
+      receipt_mode: f.receipt_mode, barcode_enabled: !!f.barcode_enabled,
       payment_methods: methods, custom_fields: cleaned,
     }).eq('id', business.id);
     setBusy(false);
@@ -82,8 +160,26 @@ export default function Settings() {
         <button type="button" className="btn small" onClick={() => setFields([...fields, { key: '', label: '', type: 'text' }])}>Add a field</button>
       </div>
 
+      <Categories businessId={business.id} />
+
       <div className="card">
-        <h3>Receipt</h3>
+        <h3>Barcodes</h3>
+        <label className="row" style={{ marginBottom: 6 }}>
+          <input type="checkbox" checked={f.barcode_enabled} onChange={(e) => setF({ ...f, barcode_enabled: e.target.checked })} /> My business uses barcodes
+        </label>
+        <p className="muted small" style={{ margin: 0 }}>Turn this off if you never scan. The barcode box and scan prompt are hidden; you still search by name. Barcodes you already saved are kept.</p>
+      </div>
+
+      <div className="card">
+        <h3>Receipts</h3>
+        <label className="field"><span>After each sale</span>
+          <select className="input" value={f.receipt_mode} onChange={set('receipt_mode')}>
+            <option value="always">Always show the receipt and print options</option>
+            <option value="ask">Ask me each time (Print receipt or No receipt)</option>
+            <option value="never">Never print: just save the sale</option>
+          </select>
+        </label>
+        <p className="muted small">Every sale is saved either way. You can always find it under Sales, print it later, or download all sales as an Excel file from the Sales screen.</p>
         <label className="field"><span>Header (address, PIN, phone)</span><textarea className="input" value={f.receipt_header} onChange={set('receipt_header')} /></label>
         <label className="field"><span>Footer message</span><textarea className="input" value={f.receipt_footer} onChange={set('receipt_footer')} /></label>
       </div>
