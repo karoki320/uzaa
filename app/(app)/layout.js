@@ -6,6 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import BottomNav from '@/components/BottomNav';
 import InstallApp from '@/components/InstallApp';
+import SyncStatus from '@/components/SyncStatus';
+import { listQueue } from '@/lib/offline';
 
 const NAV = [
   { href: '/pos', label: 'Sell', roles: ['owner', 'manager', 'cashier'] },
@@ -21,9 +23,17 @@ const NAV = [
 ];
 
 export default function Shell({ children }) {
-  const { loading, session, me, profile, business, branches, signOut } = useAuth();
+  const { loading, session, me, profile, business, branches, signOut: rawSignOut } = useAuth();
   const router = useRouter();
   const path = usePathname();
+
+  // never lose sales that are still on the phone
+  const signOut = async () => {
+    const waiting = (await listQueue()).length;
+    if (waiting && !window.confirm(`${waiting} sale${waiting > 1 ? 's are' : ' is'} not uploaded yet. They stay on this phone, but you must sign in and be online to upload them. Sign out anyway?`)) return;
+    const ok = await rawSignOut();
+    if (ok === false) window.alert('You are offline. Signing out needs internet. You are still signed in and nothing was lost.');
+  };
 
   const items = profile ? NAV.filter((n) => n.roles.includes(profile.role)) : [];
   const allowed = items.some((n) => path.startsWith(n.href));
@@ -65,6 +75,7 @@ export default function Shell({ children }) {
           {business && <span className="muted small"> &nbsp;{business.name}{myBranch ? ` / ${myBranch.name}` : ''}</span>}
         </div>
         <div className="row">
+          <SyncStatus />
           <span className="small muted desk-only">{profile.full_name} <span className="badge">{profile.role.replace('_', ' ')}</span></span>
           <span className="desk-only"><InstallApp /></span>
           <button className="btn small desk-only" onClick={signOut}>Sign out</button>

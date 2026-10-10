@@ -5,9 +5,11 @@ import { useAuth } from '@/lib/auth';
 import { money, num, stepFor } from '@/lib/util';
 import { post } from '@/lib/api';
 import { paperWidth, schemeUrl } from '@/lib/printclient';
+import { saveKv, getKv, strip, queueSale, nextLocalNo } from '@/lib/offline';
+import { syncQueue, isNetwork } from '@/lib/sync';
 
 export default function POS() {
-  const { profile, business, branches } = useAuth();
+  const { profile, business, branches, session } = useAuth();
   const isCashier = profile.role === 'cashier';
   const [branchId, setBranchId] = useState(profile.branch_id || branches[0]?.id || '');
   const [products, setProducts] = useState([]);
@@ -24,24 +26,53 @@ export default function POS() {
   const [showSearch, setShowSearch] = useState(false);
   const cartRef = useRef(null);
   const [flash, setFlash] = useState(null);
+  const [online, setOnline] = useState(true);
+  const [ref, setRef] = useState('');
+  const [fromCopy, setFromCopy] = useState(false);
   const input = useRef(null);
   const mode = business.receipt_mode || 'always';
   const barcodeOn = business.barcode_enabled !== false;
   const label = business.item_label || 'Product';
 
   useEffect(() => {
-    supabase.from('products').select('*').eq('active', true).order('name').range(0, 4999)
-      .then(({ data }) => setProducts(data || []));
+    setOnline(navigator.onLine);
+    const on = () => setOnline(true), off = () => setOnline(false);
+    window.addEventListener('online', on); window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
+
+  // shop copy: show the saved one at once (the till opens instantly, even on a weak signal),
+  // then replace it with fresh data from the server when that arrives
+  const loadProducts = useCallback(async () => {
+    const saved = await getKv('products');
+    if (saved) { setProducts((cur) => (cur.length ? cur : saved)); setFromCopy(true); }
+    if (!navigator.onLine) return;
+    const { data, error } = await supabase.from('products').select('*').eq('active', true).order('name').range(0, 4999);
+    if (!error && data) { setProducts(data); setFromCopy(false); saveKv('products', data.map(strip)); }
+  }, []);
+  useEffect(() => { loadProducts(); }, [loadProducts]);
 
   const loadStock = useCallback(async () => {
     if (!branchId) return;
-    const { data } = await supabase.from('stock').select('product_id,qty').eq('branch_id', branchId).range(0, 4999);
-    const m = {};
-    (data || []).forEach((s) => (m[s.product_id] = Number(s.qty)));
-    setStock(m);
+    const saved = await getKv(`stock:${branchId}`);
+    if (saved) setStock((cur) => (Object.keys(cur).length ? cur : saved));
+    if (!navigator.onLine) return;
+    const { data, error } = await supabase.from('stock').select('product_id,qty').eq('branch_id', branchId).range(0, 4999);
+    if (!error && data) {
+      const m = {};
+      data.forEach((x) => (m[x.product_id] = Number(x.qty)));
+      setStock(m);
+      saveKv(`stock:${branchId}`, m);
+    }
   }, [branchId]);
   useEffect(() => { loadStock(); }, [loadStock]);
+  // when the connection returns, refresh prices and stock
+  useEffect(() => { if (online) { loadProducts(); loadStock(); } }, [online]); // eslint-disable-line
+  useEffect(() => {
+    const f = () => { loadProducts(); loadStock(); };
+    window.addEventListener('uzaa-synced', f);
+    return () => window.removeEventListener('uzaa-synced', f);
+  }, [loadProducts, loadStock]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -107,21 +138,60 @@ export default function POS() {
     if (!items.length) return setErr('Cart is empty');
     if (!branchId) return setErr('No branch assigned. Ask the owner to assign you to a branch.');
     if (isCash && paid !== '' && paidNum < total) return setErr('Amount paid is less than the total');
+    const offlineNow = !navigator.onLine;
+    if (offlineNow && !isCash && ref.trim().length < 6) return setErr(`No internet: type the ${method} code from the customer's message so it can be checked later`);
     setBusy(true);
     setErr('');
-    const { data: id, error } = await supabase.rpc('create_sale', {
+    const sale = {
+      id: crypto.randomUUID(),          // one id per sale: the server never records the same sale twice
+      user_id: session?.user?.id,
+      branch_id: branchId,
+      items: items.map((c) => ({ id: c.id, name: c.name, qty: c.qty, price: c.price, unit: c.unit })),
+      method,
+      paid: isCash && paid === '' ? total : paidNum,
+      discount: disc,
+      note: !isCash && ref.trim() ? `${method} code ${ref.trim().slice(0, 40)}` : '',
+      total,
+      at: new Date().toISOString(),
+      status: 'queued',
+    };
+    const finish = () => { setCart([]); setDiscount(''); setPaid(''); setQ(''); setRef(''); };
+
+    // keep it on the phone: no signal, or the request failed on the way
+    const keep = async () => {
+      sale.local_no = await nextLocalNo();
+      try { await queueSale(sale); } catch { setBusy(false); return setErr('Could not save on this phone. Free some storage and try again.'); }
+      setStock((m) => {
+        const n = { ...m };
+        items.forEach((c) => { if (c.track) n[c.id] = Math.round(((n[c.id] ?? 0) - c.qty) * 1000) / 1000; });
+        saveKv(`stock:${branchId}`, n);
+        return n;
+      });
+      finish();
+      setFlash({ queued: true, no: sale.local_no, total, change: Math.max(0, sale.paid - total) });
+      setBusy(false);
+    };
+    if (offlineNow) return keep();
+
+    const { data: id, error, status } = await supabase.rpc('create_sale', {
       p_branch: branchId,
       p_items: items.map((c) => ({ product_id: c.id, qty: c.qty })),
       p_payment: method,
-      p_paid: isCash && paid === '' ? total : paidNum,
+      p_paid: sale.paid,
       p_discount: disc,
-      p_note: '',
+      p_note: sale.note,
+      p_client_id: sale.id,
     });
-    if (error) { setBusy(false); return setErr(error.message); }
-    const { data: sale } = await supabase.from('sales').select('id,receipt_no,total,amount_paid').eq('id', id).single();
-    setCart([]); setDiscount(''); setPaid(''); setQ('');
+    if (error) {
+      if (isNetwork(error, status) || status === 401) { sale.offlineTried = true; return keep(); }   // the sale may or may not have arrived; the id makes a re-send safe
+      setBusy(false);
+      return setErr(error.message);
+    }
+    const { data: row } = await supabase.from('sales').select('id,receipt_no,total,amount_paid').eq('id', id).single();
+    finish();
     loadStock();
-    const info = { id, no: sale?.receipt_no, total: sale?.total, change: Math.max(0, Number(sale?.amount_paid || 0) - Number(sale?.total || 0)), url: '', failed: false };
+    syncQueue(session?.user?.id);   // also send anything that was waiting
+    const info = { id, no: row?.receipt_no, total: row?.total, change: Math.max(0, Number(row?.amount_paid || 0) - Number(row?.total || 0)), url: '', failed: false };
     setFlash(info);
     if (withPrint) {
       const r = await post('/api/print/link', { sale_id: id, width: paperWidth() });
@@ -172,6 +242,7 @@ export default function POS() {
             aria-label="Scan or search"
           />
         </div>
+        {(!online || fromCopy) && <div className="tint offlinebar" role="status">Offline. Sales are saved on this phone and upload when you are back online. Prices and stock are from your last connection.</div>}
         {err && <div className="err">{err}</div>}
         {products.length === 0 && (
           <div className="tint" style={{ marginTop: 12 }}>
@@ -195,6 +266,13 @@ export default function POS() {
       <aside className="card cart" ref={cartRef}>
         {cart.length === 0 && (
           flash ? (
+            flash.queued ? (
+              <div className="flashrow" role="status">
+                <div><b>Sale {flash.no} saved on this phone.</b> {money(flash.total, cur)}{flash.change > 0 ? `, change ${money(flash.change, cur)}` : ''}
+                  <div className="small muted">It uploads by itself when you are online. Print it from Sales after that.</div></div>
+                <button className="btn small" onClick={() => setFlash(null)} aria-label="Dismiss">Close</button>
+              </div>
+            ) : (
             <div className="flashrow" role="status">
               <div><b>Sale #{flash.no} saved.</b> {money(flash.total, cur)}{flash.change > 0 ? `, change ${money(flash.change, cur)}` : ''}
                 {flash.failed && <div className="err" style={{ margin: 0 }}>Could not prepare the printer link.</div>}</div>
@@ -202,7 +280,7 @@ export default function POS() {
                 ? <a className="btn small primary" href={schemeUrl(flash.url)} style={{ textDecoration: 'none' }}>Print again</a>
                 : <button className="btn small" disabled={flash.failed} onClick={async () => { const r = await post('/api/print/link', { sale_id: flash.id, width: paperWidth() }); if (r.ok) { setFlash({ ...flash, url: r.data.url, failed: false }); window.location.href = schemeUrl(r.data.url); } else setFlash({ ...flash, failed: true }); }}>Print</button>)}
               <button className="btn small" onClick={() => setFlash(null)} aria-label="Dismiss">Close</button>
-            </div>
+            </div>)
           ) : <p className="muted cart-empty">Tap an item to start a sale.</p>
         )}
 
@@ -231,6 +309,10 @@ export default function POS() {
                 <button key={m} className={`btn small ${m === method ? 'on' : ''}`} onClick={() => setMethod(m)}>{m}</button>
               ))}
             </div>}
+            {!online && !isCash && (
+              <div className="mini"><label><span>{method} code (required offline)</span>
+                <input className="input" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="e.g. SJK4H2L9QP" autoCapitalize="characters" /></label></div>
+            )}
             <div className="mini">
               {isCash && (
                 <label>
@@ -251,9 +333,9 @@ export default function POS() {
               </div>
             )}
             <div className="chargerow">
-              {mode === 'ask' && <button className="btn" onClick={() => charge(false)} disabled={busy}>Charge</button>}
-              <button className="btn primary grow" onClick={() => charge(mode !== 'never')} disabled={busy}>
-                {busy ? 'Saving...' : `${mode === 'never' ? 'Charge' : 'Charge and print'}  ${money(total, cur)}`}
+              {mode === 'ask' && online && <button className="btn" onClick={() => charge(false)} disabled={busy}>Charge</button>}
+              <button className="btn primary grow" onClick={() => charge(mode !== 'never' && online)} disabled={busy}>
+                {busy ? 'Saving...' : `${mode === 'never' || !online ? 'Charge' : 'Charge and print'}  ${money(total, cur)}`}
               </button>
               <button className="btn small clearbtn" onClick={() => { setCart([]); setDiscount(''); setPaid(''); }} aria-label="Clear sale">Clear</button>
             </div>

@@ -91,7 +91,7 @@ export default function Sales() {
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td>#{s.receipt_no}</td>
+                <td>#{s.receipt_no}{s.offline && <span className="badge" style={{ marginLeft: 6 }}>offline</span>}{s.price_diff && <span className="badge" style={{ marginLeft: 6, color: 'var(--error)' }} title="Sold at a price different from the list price">price differs</span>}</td>
                 <td>{fmtDate(s.created_at)}</td>
                 <td>{branches.find((b) => b.id === s.branch_id)?.name}</td>
                 <td>{names[s.cashier_id] || '-'}</td>

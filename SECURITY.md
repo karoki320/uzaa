@@ -52,3 +52,11 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 - Excel download of sales: owners and managers only, limited to one year per file and 20 requests an hour, read through the signed-in user's own database permissions (so it can never include another business). Item names that start with "=" are written as plain text, not formulas.
 - Print links for the Bluetooth Print app are signed, tied to one sale, and expire after 30 minutes.
 - `categories` table has row level security: owners and managers of that business only.
+
+## Offline sales
+
+- Each sale gets a client id made on the phone; the database keeps one row per (business, client id), so a re-sent sale is never recorded twice.
+- The phone stores a copy of products, stock and settings (no cost prices) and the unsent sales in IndexedDB. No sign-in token is stored there; the session stays in the httpOnly cookie.
+- Offline sales keep their real time (rejected if in the future or older than 45 days) and the price the customer was charged. A price that differs from the list price marks the sale "price differs" for the owner. Online sales always use the server price.
+- Sales upload only under the login that made them. Signing out keeps unsent sales on the phone and warns first.
+- Non-cash offline payments need the payment code (for example the M-Pesa code) so the owner can check it later.

@@ -233,3 +233,13 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
   .pos { padding-bottom: calc(var(--cart-h, 70px) + 8px); }
 }
 @media (min-width: 900px) { .iconbtn { margin-left: 0; } .cart-lines { max-height: 50vh; } }
+
+/* ---- offline ---- */
+.syncchip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.syncchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.syncchip.off .dot { background: #B7791F; }
+.syncchip.bad { border-color: var(--error); color: var(--error); }
+.syncchip.bad .dot { background: var(--error); }
+.syncchip b { background: var(--tint); color: var(--accent); border-radius: 999px; padding: 1px 7px; }
+.offlinebar { margin-top: 8px; font-size: 13px; }
+.pendrow { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
