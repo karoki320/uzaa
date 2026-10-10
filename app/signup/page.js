@@ -2,60 +2,61 @@
 import { useState } from 'react';
 import Logo from '@/components/Logo';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import PasswordField from '@/components/PasswordField';
+import Captcha, { captchaOn } from '@/components/Captcha';
 import { useAuth } from '@/lib/auth';
+import { post, go } from '@/lib/api';
 import { TYPE_PRESETS } from '@/lib/util';
 
 export default function Signup() {
-  const router = useRouter();
-  const { session, profile, reload, loading } = useAuth();
+  const { session, profile, loading } = useAuth();
   const [f, setF] = useState({ full_name: '', email: '', password: '', business: '', type: 'retail' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [token, setToken] = useState('');
+  const [ck, setCk] = useState(0);
+  const [needCaptcha, setNeedCaptcha] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   if (loading) return <div className="center">Loading...</div>;
   if (session && profile) {
-    router.replace('/home');
+    go('/home');
     return null;
   }
 
   async function submit(e) {
     e.preventDefault();
-    setErr('');
+    setErr(''); setBusy(true);
+    const body = { business: f.business, type: f.type, full_name: f.full_name, captcha: token };
+    if (!session) { body.email = f.email; body.password = f.password; }
+    const r = await post('/api/auth/signup', body);
+    if (r.ok && r.data.confirm) { setNotice(r.data.message); setBusy(false); return; }
+    if (r.ok) return go(r.data.next || '/pos');
+    setBusy(false);
+    setErr(r.data.error || 'Something went wrong');
+    if (r.data.captcha) { setNeedCaptcha(true); setToken(''); setCk((k) => k + 1); }
+  }
+
+  async function resend() {
     setBusy(true);
-    try {
-      if (!session) {
-        if (f.password.length < 8) throw new Error('Password must be at least 8 characters');
-        const { data, error } = await supabase.auth.signUp({ email: f.email.trim(), password: f.password });
-        if (error) throw error;
-        if (!data.session) {
-          const { error: e2 } = await supabase.auth.signInWithPassword({ email: f.email.trim(), password: f.password });
-          if (e2) {
-            setNotice(`We sent a confirmation link to ${f.email.trim()}. Open it, then sign in to finish setting up your business.`);
-            setBusy(false);
-            return;
-          }
-        }
-      }
-      const preset = TYPE_PRESETS[f.type];
-      const { error } = await supabase.rpc('register_business', {
-        p_name: f.business.trim(),
-        p_type: f.type,
-        p_full_name: f.full_name.trim(),
-        p_item_label: preset.item_label,
-        p_custom_fields: preset.custom_fields,
-      });
-      if (error) throw error;
-      await reload();
-      router.replace('/pos');
-    } catch (ex) {
-      setErr(ex.message || 'Something went wrong');
-    } finally {
-      setBusy(false);
-    }
+    const r = await post('/api/auth/resend', { email: f.email });
+    setBusy(false);
+    setNotice(r.ok ? r.data.message : r.data.error);
+  }
+
+  if (notice) {
+    return (
+      <div className="auth">
+        <div style={{ marginBottom: 8 }}><Logo height={44} /></div>
+        <div className="card stack" role="status">
+          <h2>Check your email</h2>
+          <p>{notice}</p>
+          <p className="muted small">Nothing there? Look in spam, or <button type="button" className="linkbtn" disabled={busy} onClick={resend}>send it again</button>.</p>
+        </div>
+        <p className="muted"><Link href="/login">Back to sign in</Link></p>
+      </div>
+    );
   }
 
   return (
@@ -65,7 +66,7 @@ export default function Signup() {
       <form onSubmit={submit} className="card">
         <label className="field">
           <span>Business name</span>
-          <input className="input" required value={f.business} onChange={set('business')} placeholder="e.g. Mama Njeri Stores" />
+          <input className="input" required maxLength={120} value={f.business} onChange={set('business')} placeholder="e.g. Mama Njeri Stores" />
         </label>
         <label className="field">
           <span>Type of business</span>
@@ -75,7 +76,7 @@ export default function Signup() {
         </label>
         <label className="field">
           <span>Your name</span>
-          <input className="input" required value={f.full_name} onChange={set('full_name')} />
+          <input className="input" required maxLength={120} value={f.full_name} onChange={set('full_name')} />
         </label>
         {!session && (
           <>
@@ -83,14 +84,11 @@ export default function Signup() {
               <span>Email</span>
               <input className="input" type="email" required autoComplete="email" value={f.email} onChange={set('email')} />
             </label>
-            <label className="field">
-              <span>Password</span>
-              <input className="input" type="password" required autoComplete="new-password" value={f.password} onChange={set('password')} />
-            </label>
+            <PasswordField value={f.password} onChange={(v) => setF({ ...f, password: v })} email={f.email} />
           </>
         )}
-        {err && <div className="err">{err}</div>}
-        {notice && <div className="card" role="status" style={{ marginBottom: 12 }}>{notice}</div>}
+        {needCaptcha && captchaOn && <Captcha onToken={setToken} resetKey={ck} />}
+        {err && <div className="err" role="alert">{err}</div>}
         <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Setting up...' : 'Create my business'}</button>
       </form>
       <p className="muted">Already have an account? <Link href="/login">Sign in</Link></p>

@@ -144,3 +144,24 @@ td.num, th.num { text-align: right; white-space: nowrap; }
   body.print-report .receipt-print { position: static; width: auto; }
   @page { margin: 6mm; }
 }
+
+/* auth extras */
+label.lab { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.field { margin-bottom: 14px; }
+.pwbox { display: flex; gap: 8px; align-items: stretch; }
+.pwbox .input { flex: 1; min-width: 0; }
+.pwbox .btn { min-height: 48px; }
+.meter { display: flex; gap: 4px; margin: 8px 0 4px; }
+.meter i { flex: 1; height: 8px; border-radius: 4px; background: var(--line); }
+.meter i.on.s1 { background: var(--error); }
+.meter i.on.s2 { background: #B7791F; }
+.meter i.on.s3, .meter i.on.s4 { background: #1a6b3a; }
+ul.rules { list-style: none; padding: 0; margin: 6px 0 0; display: grid; grid-template-columns: 1fr; gap: 2px; color: var(--muted); }
+ul.rules li.met { color: #1a6b3a; font-weight: 600; }
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; min-height: 44px; }
+.stack > * + * { margin-top: 12px; }
+.code { font-size: 28px; letter-spacing: 8px; text-align: center; font-weight: 800; }
+.codes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 17px; font-weight: 700; }
+.codes span { background: var(--tint); border-radius: 10px; padding: 8px 10px; text-align: center; }
+.qr { display: block; width: 200px; height: 200px; margin: 8px auto; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); }
+.note { background: var(--tint); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }

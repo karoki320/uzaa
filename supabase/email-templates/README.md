@@ -30,9 +30,16 @@ Supabase's built-in sender is limited to a few emails an hour. Use your own SMTP
    - Password: your Resend API key
 4. Send yourself a test: use Forgot password, or create a test user.
 
-## 3. Confirm email on or off
-- Off (default now): new owners get in straight away. Fastest for onboarding.
-- On: Authentication > Providers > Email > Confirm email. The signup page then tells the owner to check their email, and finishes setting up the business after they confirm and sign in.
+## 3. Turn on the safe settings in Supabase
+Authentication > Providers > Email:
+- Confirm email: ON (the signup page then tells the owner to check their email, and the business is created when they open the link).
+- Secure password change: ON (changing a password while signed in needs the emailed 6 digit code).
+- Secure email change: ON (both the old and new address must confirm).
+- Minimum password length: 12.
+Authentication > Multi-Factor: make sure TOTP is enabled.
 
 ## 4. URLs
-Authentication > URL Configuration: set Site URL to https://uzaa.co.ke and add https://uzaa.co.ke/** to Redirect URLs. Without this, the links in emails can send people to the wrong place.
+Authentication > URL Configuration: set Site URL to https://uzaa.co.ke and add https://uzaa.co.ke/** to Redirect URLs.
+
+## Why the links look different
+Every button points to https://uzaa.co.ke/auth/confirm?token_hash=...&type=... (not Supabase's own link). Uzaa checks the one-time token on its own server, sets the secure session cookie, then sends the person to the right screen: choose a password (reset and invite), the app (signup, magic link) or Security (email change). Links work once and expire after an hour.

@@ -3,7 +3,6 @@ import { useEffect } from 'react';
 import Logo from '@/components/Logo';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 
 const NAV = [
@@ -16,10 +15,11 @@ const NAV = [
   { href: '/staff', label: 'Staff', roles: ['owner'] },
   { href: '/settings', label: 'Settings', roles: ['owner'] },
   { href: '/admin', label: 'All businesses', roles: ['super_admin'] },
+  { href: '/security', label: 'Security', roles: ['owner', 'manager', 'cashier', 'super_admin'] },
 ];
 
 export default function Shell({ children }) {
-  const { loading, session, profile, business, branches } = useAuth();
+  const { loading, session, me, profile, business, branches, signOut } = useAuth();
   const router = useRouter();
   const path = usePathname();
 
@@ -29,14 +29,11 @@ export default function Shell({ children }) {
   useEffect(() => {
     if (loading) return;
     if (!session) router.replace('/login');
+    else if (me?.needsMfa) router.replace('/mfa');
     else if (!profile) router.replace('/signup');
+    else if (me?.mustEnrol && !path.startsWith('/security')) router.replace('/security?setup=1');
     else if (!allowed && items.length) router.replace(items[0].href);
-  }, [loading, session, profile, allowed, items.length, router]); // eslint-disable-line
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    router.replace('/login');
-  };
+  }, [loading, session, me, profile, allowed, items.length, path, router]); // eslint-disable-line
 
   if (loading || !session || !profile) return <div className="center">Loading...</div>;
 
