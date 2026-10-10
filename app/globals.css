@@ -200,3 +200,36 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
   .modal { margin: 8px 0; padding: 16px; }
   .shell-head .brand + .muted { display: inline-block; max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 }
+
+/* ---- till: compact, speed first ---- */
+.posbar { display: flex; align-items: center; gap: 8px; }
+.chips { display: flex; gap: 6px; overflow-x: auto; flex: 1; scrollbar-width: none; padding: 2px 0; }
+.chips::-webkit-scrollbar { display: none; }
+.chips button { flex: none; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; }
+.chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.iconbtn { flex: none; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin-left: auto; }
+.branch-pick { width: auto; max-width: 140px; min-height: 44px; font-size: 13px; }
+.searchrow { display: none; margin-top: 8px; }
+.searchrow.open { display: block; }
+.cart-lines { max-height: 26vh; overflow-y: auto; }
+.cart-line { grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 6px 0; }
+.cart-line .nm b { font-size: 14px; }
+.cart-line .lt { font-size: 14px; min-width: 64px; text-align: right; }
+.cart .qty input { width: 54px; text-align: center; padding: 6px 4px; font-size: 14px; min-height: 40px; }
+.cart .pay { margin: 8px 0; gap: 6px; }
+.cart .pay button { min-width: 0; min-height: 40px; font-size: 13px; }
+.mini { display: flex; gap: 8px; }
+.mini label { flex: 1; font-size: 12px; color: var(--muted); }
+.mini .input { min-height: 40px; font-size: 14px; padding: 6px 10px; margin-top: 2px; }
+.sumline { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.chargerow { display: flex; gap: 8px; margin-top: 8px; align-items: stretch; }
+.chargerow .grow { flex: 1; min-height: 52px; font-size: 16px; }
+.clearbtn { min-height: 52px; }
+.flashrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+.flashrow > div { flex: 1; min-width: 140px; }
+.cart-empty { margin: 4px 0; font-size: 14px; }
+@media (max-width: 899px) {
+  .pos .cart { position: fixed; left: 0; right: 0; bottom: calc(60px + env(safe-area-inset-bottom)); z-index: 20; border-radius: 16px 16px 0 0; margin: 0; padding: 10px 12px; box-shadow: 0 -6px 18px rgba(20,24,31,.12); }
+  .pos { padding-bottom: calc(var(--cart-h, 70px) + 8px); }
+}
+@media (min-width: 900px) { .iconbtn { margin-left: 0; } .cart-lines { max-height: 50vh; } }

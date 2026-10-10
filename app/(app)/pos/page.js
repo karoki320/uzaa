@@ -3,9 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { money, num, stepFor } from '@/lib/util';
-import Modal from '@/components/Modal';
-import Receipt from '@/components/Receipt';
-import PrintButtons from '@/components/PrintButtons';
+import { post } from '@/lib/api';
+import { paperWidth, schemeUrl } from '@/lib/printclient';
 
 export default function POS() {
   const { profile, business, branches } = useAuth();
@@ -21,17 +20,14 @@ export default function POS() {
   const [paid, setPaid] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [done, setDone] = useState(null);
-  const [auto, setAuto] = useState(false);
+  const [cat, setCat] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const cartRef = useRef(null);
   const [flash, setFlash] = useState(null);
   const input = useRef(null);
   const mode = business.receipt_mode || 'always';
   const barcodeOn = business.barcode_enabled !== false;
   const label = business.item_label || 'Product';
-
-  useEffect(() => {
-    try { setAuto(localStorage.getItem('uzaa_autoprint') === '1'); } catch {}
-  }, []);
 
   useEffect(() => {
     supabase.from('products').select('*').eq('active', true).order('name').range(0, 4999)
@@ -49,11 +45,24 @@ export default function POS() {
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
+    const base = cat ? products.filter((p) => (p.category || '') === cat) : products;
     const list = t
-      ? products.filter((p) => p.name.toLowerCase().includes(t) || (p.barcode || '').toLowerCase().includes(t) || (p.category || '').toLowerCase().includes(t))
-      : products;
+      ? base.filter((p) => p.name.toLowerCase().includes(t) || (p.barcode || '').toLowerCase().includes(t) || (p.category || '').toLowerCase().includes(t))
+      : base;
     return list.slice(0, 60);
-  }, [products, q]);
+  }, [products, q, cat]);
+  const cats = useMemo(() => [...new Set(products.map((p) => (p.category || '').trim()).filter(Boolean))].sort(), [products]);
+
+  // keep the product list clear of the cart that is fixed at the bottom on phones
+  useEffect(() => {
+    const el = cartRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const set = () => document.documentElement.style.setProperty('--cart-h', `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty('--cart-h'); };
+  });
 
   function add(p) {
     setCart((c) => {
@@ -93,7 +102,7 @@ export default function POS() {
   const paidNum = isCash ? Number(paid) || 0 : total;
   const change = isCash ? Math.max(0, paidNum - total) : 0;
 
-  async function charge() {
+  async function charge(withPrint) {
     const items = cart.filter((c) => c.qty > 0);
     if (!items.length) return setErr('Cart is empty');
     if (!branchId) return setErr('No branch assigned. Ask the owner to assign you to a branch.');
@@ -109,166 +118,148 @@ export default function POS() {
       p_note: '',
     });
     if (error) { setBusy(false); return setErr(error.message); }
-    const { data: sale } = await supabase.from('sales').select('*').eq('id', id).single();
-    setBusy(false);
-    const lines = items.map((c) => ({ name: c.name, qty: c.qty, price: c.price, unit: c.unit }));
+    const { data: sale } = await supabase.from('sales').select('id,receipt_no,total,amount_paid').eq('id', id).single();
     setCart([]); setDiscount(''); setPaid(''); setQ('');
     loadStock();
-    if (mode === 'never') {
-      setFlash({ no: sale.receipt_no, total: sale.total, change: Math.max(0, Number(sale.amount_paid || 0) - Number(sale.total || 0)) });
-      setTimeout(() => setFlash(null), 8000);
-      setTimeout(() => input.current?.focus(), 50);
-      return;
+    const info = { id, no: sale?.receipt_no, total: sale?.total, change: Math.max(0, Number(sale?.amount_paid || 0) - Number(sale?.total || 0)), url: '', failed: false };
+    setFlash(info);
+    if (withPrint) {
+      const r = await post('/api/print/link', { sale_id: id, width: paperWidth() });
+      if (r.ok) {
+        setFlash({ ...info, url: r.data.url });
+        window.location.href = schemeUrl(r.data.url);   // opens the Bluetooth Print app
+      } else {
+        setFlash({ ...info, failed: true });
+      }
     }
-    setDone({ sale, items: lines, show: mode === 'always' });
-    if (mode === 'always' && auto) setTimeout(() => window.print(), 400);
+    setBusy(false);
   }
 
-  function closeReceipt() {
-    setDone(null);
-    setTimeout(() => input.current?.focus(), 50);
-  }
-
-  const toggleAuto = (v) => {
-    setAuto(v);
-    try { localStorage.setItem('uzaa_autoprint', v ? '1' : '0'); } catch {}
-  };
+  const lbl = (u) => (u && u !== 'pc' ? ` ${u}` : '');
+  const cur = business.currency;
 
   if (!branchId) {
     return <div className="card"><h2>No branch assigned</h2><p>Ask the business owner to assign you to a branch in Staff.</p></div>;
   }
 
-  const branch = branches.find((b) => b.id === branchId);
-
   return (
-    <>
-      <div className="pos no-print">
-        <section>
-          <div className="row">
-            <input
-              ref={input}
-              autoFocus
-              className="input grow"
-              style={{ fontSize: 18 }}
-              placeholder={barcodeOn ? `Scan barcode or search ${label.toLowerCase()}...` : `Search ${label.toLowerCase()}...`}
-              value={q}
-              onChange={(e) => { setQ(e.target.value); setErr(''); }}
-              onKeyDown={onSearchKey}
-              aria-label="Scan or search"
-            />
-            {!isCashier && branches.length > 1 && (
-              <select className="input" style={{ width: 200 }} value={branchId} onChange={(e) => { setBranchId(e.target.value); setCart([]); }}>
-                {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            )}
-          </div>
-          {err && <div className="err">{err}</div>}
-          {flash && (
-            <div className="note" role="status" style={{ marginTop: 12 }}>
-              <b>Sale #{flash.no} saved.</b> Total {money(flash.total, business.currency)}{flash.change > 0 ? `, change ${money(flash.change, business.currency)}` : ''}.
+    <div className="pos no-print">
+      <section>
+        <div className="posbar">
+          {cats.length > 0 && (
+            <div className="chips" role="tablist" aria-label="Categories">
+              <button className={!cat ? 'on' : ''} onClick={() => setCat('')}>All</button>
+              {cats.map((c) => <button key={c} className={cat === c ? 'on' : ''} onClick={() => setCat(cat === c ? '' : c)}>{c}</button>)}
             </div>
           )}
-          {products.length === 0 && (
-            <div className="tint" style={{ marginTop: 12 }}>
-              No {label.toLowerCase()}s yet. {profile.role === 'cashier' ? 'Ask your manager to add some.' : 'Open Products to add your first one.'}
-            </div>
+          {!isCashier && branches.length > 1 && (
+            <select className="input branch-pick" value={branchId} onChange={(e) => { setBranchId(e.target.value); setCart([]); }} aria-label="Branch">
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
           )}
-          <div className="tiles">
-            {filtered.map((p) => {
-              const s = stock[p.id] ?? 0;
-              return (
-                <button key={p.id} className="tile" onClick={() => { add(p); input.current?.focus(); }}>
-                  <b>{p.name}</b>
-                  <span className="p">{money(p.price, business.currency)}{p.unit && p.unit !== 'pc' ? <span className="s"> / {p.unit}</span> : null}</span>
-                  {p.track_stock && (
-                    <div className={`s ${s <= Number(p.low_stock_level) ? 'warn' : ''}`}>{num(s)}{p.unit && p.unit !== 'pc' ? ` ${p.unit}` : ''} in stock</div>
-                  )}
-                </button>
-              );
-            })}
+          <button type="button" className="iconbtn" onClick={() => { setShowSearch((v) => !v); setTimeout(() => input.current?.focus(), 30); }} aria-label="Search" aria-expanded={showSearch}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          </button>
+        </div>
+        <div className={`searchrow ${showSearch ? 'open' : ''}`}>
+          <input
+            ref={input}
+            className="input"
+            placeholder={barcodeOn ? `Scan barcode or search ${label.toLowerCase()}...` : `Search ${label.toLowerCase()}...`}
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setErr(''); }}
+            onKeyDown={onSearchKey}
+            aria-label="Scan or search"
+          />
+        </div>
+        {err && <div className="err">{err}</div>}
+        {products.length === 0 && (
+          <div className="tint" style={{ marginTop: 12 }}>
+            No {label.toLowerCase()}s yet. {profile.role === 'cashier' ? 'Ask your manager to add some.' : 'Open Products to add your first one.'}
           </div>
-        </section>
+        )}
+        <div className="tiles">
+          {filtered.map((p) => {
+            const s = stock[p.id] ?? 0;
+            return (
+              <button key={p.id} className="tile" onClick={() => add(p)}>
+                <b>{p.name}</b>
+                <span className="p">{money(p.price, cur)}{p.unit && p.unit !== 'pc' ? <span className="s"> / {p.unit}</span> : null}</span>
+                {p.track_stock && <div className={`s ${s <= Number(p.low_stock_level) ? 'warn' : ''}`}>{num(s)}{lbl(p.unit)} in stock</div>}
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
-        <aside className="card cart">
-          <h2>Current sale</h2>
-          {cart.length === 0 && <p className="muted">Scan or tap an item to start.</p>}
-          {cart.map((c) => (
-            <div key={c.id} className="cart-line">
-              <div>
-                <b>{c.name}</b>
-                <div className="small muted">{money(c.price, business.currency)} per {c.unit && c.unit !== 'pc' ? c.unit : 'item'}</div>
-                {c.track && (stock[c.id] ?? 0) < c.qty && <div className="small warn">Only {num(stock[c.id] ?? 0)}{c.unit && c.unit !== 'pc' ? ` ${c.unit}` : ''} in stock</div>}
-              </div>
-              <div className="right">
-                <div className="qty">
-                  <button onClick={() => setQty(c.id, -1)} aria-label="Less">-</button>
-                  <input className="input" style={{ width: 64, textAlign: 'center' }} inputMode="decimal" value={c.qs ?? c.qty} onChange={(e) => typeQty(c.id, e.target.value)} aria-label={`Quantity${c.unit && c.unit !== 'pc' ? ' in ' + c.unit : ''}`} />
-                  <button onClick={() => setQty(c.id, 1)} aria-label="More">+</button>
+      <aside className="card cart" ref={cartRef}>
+        {cart.length === 0 && (
+          flash ? (
+            <div className="flashrow" role="status">
+              <div><b>Sale #{flash.no} saved.</b> {money(flash.total, cur)}{flash.change > 0 ? `, change ${money(flash.change, cur)}` : ''}
+                {flash.failed && <div className="err" style={{ margin: 0 }}>Could not prepare the printer link.</div>}</div>
+              {mode !== 'never' && (flash.url
+                ? <a className="btn small primary" href={schemeUrl(flash.url)} style={{ textDecoration: 'none' }}>Print again</a>
+                : <button className="btn small" disabled={flash.failed} onClick={async () => { const r = await post('/api/print/link', { sale_id: flash.id, width: paperWidth() }); if (r.ok) { setFlash({ ...flash, url: r.data.url, failed: false }); window.location.href = schemeUrl(r.data.url); } else setFlash({ ...flash, failed: true }); }}>Print</button>)}
+              <button className="btn small" onClick={() => setFlash(null)} aria-label="Dismiss">Close</button>
+            </div>
+          ) : <p className="muted cart-empty">Tap an item to start a sale.</p>
+        )}
+
+        {cart.length > 0 && (
+          <>
+            <div className="cart-lines">
+              {cart.map((c) => (
+                <div key={c.id} className="cart-line">
+                  <div className="nm">
+                    <b>{c.name}</b>
+                    <div className="small muted">{money(c.price, cur)} per {c.unit && c.unit !== 'pc' ? c.unit : 'item'}</div>
+                    {c.track && (stock[c.id] ?? 0) < c.qty && <div className="small warn">Only {num(stock[c.id] ?? 0)}{lbl(c.unit)} in stock</div>}
+                  </div>
+                  <div className="qty">
+                    <button onClick={() => setQty(c.id, -1)} aria-label="Less">-</button>
+                    <input className="input" inputMode="decimal" value={c.qs ?? c.qty} onChange={(e) => typeQty(c.id, e.target.value)} aria-label={`Quantity${c.unit && c.unit !== 'pc' ? ' in ' + c.unit : ''}`} />
+                    <button onClick={() => setQty(c.id, 1)} aria-label="More">+</button>
+                  </div>
+                  <b className="lt">{money(c.qty * c.price, cur)}</b>
                 </div>
-                <div><b>{money(c.qty * c.price, business.currency)}</b></div>
-              </div>
+              ))}
             </div>
-          ))}
 
-          {cart.length > 0 && (
-            <>
-              <label className="field" style={{ marginTop: 12 }}>
-                <span>Discount ({business.currency})</span>
-                <input className="input" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
-              </label>
-              <div className="totals">
-                <div><span>Subtotal</span><span>{money(sub, business.currency)}</span></div>
-                {disc > 0 && <div><span>Discount</span><span>-{money(disc, business.currency)}</span></div>}
-                {tax > 0 && <div><span>Tax ({rate}%)</span><span>{money(tax, business.currency)}</span></div>}
-                <div className="grand"><span>Total</span><span>{money(total, business.currency)}</span></div>
-              </div>
-              <div className="pay">
-                {methods.map((m) => (
-                  <button key={m} className={`btn ${m === method ? 'on' : ''}`} onClick={() => setMethod(m)}>{m}</button>
-                ))}
-              </div>
+            {methods.length > 1 && <div className="pay">
+              {methods.map((m) => (
+                <button key={m} className={`btn small ${m === method ? 'on' : ''}`} onClick={() => setMethod(m)}>{m}</button>
+              ))}
+            </div>}
+            <div className="mini">
               {isCash && (
-                <label className="field">
+                <label>
                   <span>Cash received</span>
                   <input className="input" inputMode="decimal" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder={String(total)} />
-                  {paid !== '' && paidNum >= total && <div className="ok" style={{ marginTop: 6 }}>Change: {money(change, business.currency)}</div>}
                 </label>
               )}
-              <button className="btn primary" style={{ width: '100%', fontSize: 18 }} onClick={charge} disabled={busy}>
-                {busy ? 'Saving...' : `Charge ${money(total, business.currency)}`}
-              </button>
-              <button className="btn small" style={{ width: '100%', marginTop: 8 }} onClick={() => { setCart([]); setDiscount(''); setPaid(''); }}>Clear sale</button>
-            </>
-          )}
-        </aside>
-      </div>
-
-      {done && (
-        <Modal onClose={closeReceipt}>
-          {done.show ? (
-            <>
-              <Receipt business={business} branch={branch} sale={done.sale} items={done.items} cashier={profile.full_name} />
-              <div className="no-print" style={{ marginTop: 16 }}>
-                {mode === 'always' && (
-                  <label className="row small" style={{ marginBottom: 12 }}>
-                    <input type="checkbox" checked={auto} onChange={(e) => toggleAuto(e.target.checked)} /> Print receipt automatically after each sale
-                  </label>
-                )}
-                <PrintButtons saleId={done.sale.id} />
-                <button className="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={closeReceipt}>New sale</button>
-              </div>
-            </>
-          ) : (
-            <div className="stack no-print">
-              <h2>Sale #{done.sale.receipt_no} saved</h2>
-              <div className="kpi"><div className="l">Total</div><div className="v">{money(done.sale.total, business.currency)}</div></div>
-              {Number(done.sale.amount_paid) > Number(done.sale.total) && <p>Change: <b>{money(Number(done.sale.amount_paid) - Number(done.sale.total), business.currency)}</b></p>}
-              <button className="btn" style={{ width: '100%' }} onClick={() => setDone({ ...done, show: true })}>Print receipt</button>
-              <button className="btn primary" style={{ width: '100%' }} onClick={closeReceipt}>No receipt, new sale</button>
+              <label>
+                <span>Discount</span>
+                <input className="input" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0" />
+              </label>
             </div>
-          )}
-        </Modal>
-      )}
-    </>
+            {(disc > 0 || tax > 0 || (isCash && paid !== '' && paidNum >= total)) && (
+              <div className="small muted sumline">
+                {disc > 0 && <span>Discount -{money(disc, cur)}</span>}
+                {tax > 0 && <span>Tax ({rate}%) {money(tax, cur)}</span>}
+                {isCash && paid !== '' && paidNum >= total && <span className="ok">Change {money(change, cur)}</span>}
+              </div>
+            )}
+            <div className="chargerow">
+              {mode === 'ask' && <button className="btn" onClick={() => charge(false)} disabled={busy}>Charge</button>}
+              <button className="btn primary grow" onClick={() => charge(mode !== 'never')} disabled={busy}>
+                {busy ? 'Saving...' : `${mode === 'never' ? 'Charge' : 'Charge and print'}  ${money(total, cur)}`}
+              </button>
+              <button className="btn small clearbtn" onClick={() => { setCart([]); setDiscount(''); setPaid(''); }} aria-label="Clear sale">Clear</button>
+            </div>
+          </>
+        )}
+      </aside>
+    </div>
   );
 }
