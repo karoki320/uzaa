@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import BottomNav from '@/components/BottomNav';
 import InstallApp from '@/components/InstallApp';
 import SyncStatus from '@/components/SyncStatus';
+import InstallBanner from '@/components/InstallBanner';
 import { listQueue } from '@/lib/offline';
 
 const NAV = [
@@ -86,7 +87,7 @@ export default function Shell({ children }) {
           <Link key={n.href} href={n.href} className={`tab ${path.startsWith(n.href) ? 'active' : ''}`}>{n.label}</Link>
         ))}
       </nav>
-      <main className="page">{allowed ? children : null}</main>
+      <main className="page"><InstallBanner />{allowed ? children : null}</main>
       <BottomNav items={items} signOut={signOut} who={`${profile.full_name} (${profile.role.replace('_', ' ')})`} />
     </>
   );

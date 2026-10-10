@@ -243,3 +243,5 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 .syncchip b { background: var(--tint); color: var(--accent); border-radius: 999px; padding: 1px 7px; }
 .offlinebar { margin-top: 8px; font-size: 13px; }
 .pendrow { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.installbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--tint); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px; }
+.installbar > div:first-child { flex: 1; min-width: 180px; }

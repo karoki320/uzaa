@@ -22,6 +22,14 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
           rel="stylesheet"
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "window.__uzaaBip=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__uzaaBip=e;dispatchEvent(new Event('uzaa-installable'))});" +
+              "addEventListener('appinstalled',function(){window.__uzaaBip=null;dispatchEvent(new Event('uzaa-installable'))});" +
+              "if('serviceWorker'in navigator)addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})});",
+          }}
+        />
       </head>
       <body>
         <AuthProvider>{children}</AuthProvider>

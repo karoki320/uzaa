@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import InstallApp from '@/components/InstallApp';
 import { TYPE_PRESETS, slug } from '@/lib/util';
 
 function Categories({ businessId }) {
@@ -182,6 +183,17 @@ export default function Settings() {
         <p className="muted small">Every sale is saved either way. You can always find it under Sales, print it later, or download all sales as an Excel file from the Sales screen.</p>
         <label className="field"><span>Header (address, PIN, phone)</span><textarea className="input" value={f.receipt_header} onChange={set('receipt_header')} /></label>
         <label className="field"><span>Footer message</span><textarea className="input" value={f.receipt_footer} onChange={set('receipt_footer')} /></label>
+      </div>
+
+      <div className="card">
+        <h3>Install Uzaa on a phone or tablet</h3>
+        <p className="small muted" style={{ marginTop: 0 }}>Installed, Uzaa opens full screen from the home screen and starts faster. There is nothing to download from Google Play.</p>
+        <ol className="small" style={{ paddingLeft: 20, margin: '0 0 10px' }}>
+          <li><b>Android:</b> open uzaa.co.ke in Chrome, tap the three-dot menu, then <b>Install app</b> (sometimes called "Add to Home screen").</li>
+          <li><b>iPhone or iPad:</b> open uzaa.co.ke in Safari, tap the Share button, then <b>Add to Home Screen</b>.</li>
+          <li><b>Computer:</b> in Chrome or Edge, click the install icon at the right of the address bar.</li>
+        </ol>
+        <InstallApp className="btn primary">Install on this device</InstallApp>
       </div>
 
       <div className="card">
