@@ -4,6 +4,7 @@ import Logo from '@/components/Logo';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import BottomNav from '@/components/BottomNav';
 
 const NAV = [
   { href: '/pos', label: 'Sell', roles: ['owner', 'manager', 'cashier'] },
@@ -14,7 +15,7 @@ const NAV = [
   { href: '/branches', label: 'Branches', roles: ['owner'] },
   { href: '/staff', label: 'Staff', roles: ['owner'] },
   { href: '/settings', label: 'Settings', roles: ['owner'] },
-  { href: '/admin', label: 'All businesses', roles: ['super_admin'] },
+  { href: '/admin', label: 'All businesses', short: 'Businesses', roles: ['super_admin'] },
   { href: '/security', label: 'Security', roles: ['owner', 'manager', 'cashier', 'super_admin'] },
 ];
 
@@ -63,16 +64,17 @@ export default function Shell({ children }) {
           {business && <span className="muted small"> &nbsp;{business.name}{myBranch ? ` / ${myBranch.name}` : ''}</span>}
         </div>
         <div className="row">
-          <span className="small muted">{profile.full_name} <span className="badge">{profile.role.replace('_', ' ')}</span></span>
-          <button className="btn small" onClick={signOut}>Sign out</button>
+          <span className="small muted desk-only">{profile.full_name} <span className="badge">{profile.role.replace('_', ' ')}</span></span>
+          <button className="btn small desk-only" onClick={signOut}>Sign out</button>
         </div>
       </div>
-      <nav className="tabs no-print">
+      <nav className="tabs no-print desk-only">
         {items.map((n) => (
           <Link key={n.href} href={n.href} className={`tab ${path.startsWith(n.href) ? 'active' : ''}`}>{n.label}</Link>
         ))}
       </nav>
       <main className="page">{allowed ? children : null}</main>
+      <BottomNav items={items} signOut={signOut} who={`${profile.full_name} (${profile.role.replace('_', ' ')})`} />
     </>
   );
 }

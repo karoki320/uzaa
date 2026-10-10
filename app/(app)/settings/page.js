@@ -88,6 +88,15 @@ export default function Settings() {
         <label className="field"><span>Footer message</span><textarea className="input" value={f.receipt_footer} onChange={set('receipt_footer')} /></label>
       </div>
 
+      <div className="card">
+        <h3>Receipt printer (Xprinter and other Bluetooth or USB thermal printers)</h3>
+        <ol className="small" style={{ paddingLeft: 20, margin: 0 }}>
+          <li>On the Android phone or tablet, install the <b>Bluetooth Print</b> app from Google Play and pair your printer in it.</li>
+          <li>In the app, turn on <b>Browser Print</b>.</li>
+          <li>Open Uzaa in Chrome. After a sale, tap <b>Print to Bluetooth printer</b>. Choose 58 mm or 80 mm paper to match your roll.</li>
+        </ol>
+      </div>
+
       {err && <div className="err">{err}</div>}
       {msg && <div className="ok">{msg}</div>}
       <button className="btn primary" disabled={busy}>{busy ? 'Saving...' : 'Save settings'}</button>

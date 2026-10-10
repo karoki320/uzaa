@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { fmtDate, isoDate, money } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
+import PrintButtons from '@/components/PrintButtons';
 
 export default function Sales() {
   const { business, branches, profile } = useAuth();
@@ -83,9 +84,9 @@ export default function Sales() {
       {view && (
         <Modal onClose={() => setView(null)}>
           <Receipt business={business} branch={branches.find((b) => b.id === view.sale.branch_id)} sale={view.sale} items={view.items} cashier={names[view.sale.cashier_id]} />
-          <div className="row no-print" style={{ marginTop: 16 }}>
-            <button className="btn" onClick={() => window.print()}>Print receipt</button>
-            <button className="btn primary grow" onClick={() => setView(null)}>Close</button>
+          <div className="no-print" style={{ marginTop: 16 }}>
+            <PrintButtons saleId={view.sale.id} />
+            <button className="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={() => setView(null)}>Close</button>
           </div>
         </Modal>
       )}

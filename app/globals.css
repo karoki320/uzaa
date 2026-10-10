@@ -165,3 +165,38 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 .codes span { background: var(--tint); border-radius: 10px; padding: 8px 10px; text-align: center; }
 .qr { display: block; width: 200px; height: 200px; margin: 8px auto; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); }
 .note { background: var(--tint); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+
+/* phone layout: bottom tab bar */
+.bnav, .sheet-back { display: none; }
+@media (max-width: 899px) {
+  .desk-only { display: none !important; }
+  .shell-head { position: sticky; top: 0; z-index: 20; padding: 8px 14px; }
+  .page { padding: 12px 12px calc(88px + env(safe-area-inset-bottom)); }
+  .bnav {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    background: var(--surface); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bnav a, .bnav button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 60px; padding: 6px 2px; border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 600;
+    color: var(--muted); text-decoration: none; cursor: pointer; position: relative;
+  }
+  .bnav .on { color: var(--accent); }
+  .bnav .on::before { content: ''; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
+  .sheet-back { display: flex; align-items: flex-end; position: fixed; inset: 0; z-index: 60; background: rgba(20, 24, 31, 0.5); }
+  .sheet { width: 100%; background: var(--surface); border-radius: 20px 20px 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; }
+  .sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 4px auto 12px; }
+  .sheet a, .sheet button {
+    display: flex; align-items: center; gap: 14px; width: 100%; min-height: 52px; padding: 0 8px;
+    border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; font-size: 16px; font-weight: 600;
+    color: var(--ink); text-decoration: none; text-align: left; cursor: pointer;
+  }
+  .sheet .on { color: var(--accent); }
+  .shell-head > div:first-child { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .shell-head .brand svg, .shell-head .brand img { height: 26px; width: auto; }
+  .overlay { padding: 8px; }
+  .modal { margin: 8px 0; padding: 16px; }
+  .shell-head .brand + .muted { display: inline-block; max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+}

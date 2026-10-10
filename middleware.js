@@ -24,13 +24,15 @@ export async function middleware(req) {
       },
     },
   });
-  const { data } = await sb.auth.getUser();   // checks with Supabase and refreshes an expired token
+  // Reads the cookie session locally (and refreshes it if expired): no extra trip to Supabase per page.
+  // This only decides which screen to show. Data is protected by row level security and the API routes,
+  // which check every request with Supabase.
+  const { data } = await sb.auth.getSession();
   const to = (p) => { const u = req.nextUrl.clone(); u.pathname = p; u.search = ''; return NextResponse.redirect(u); };
-  if (!data?.user) return to('/login');
+  if (!data?.session) return to('/login');
 
   if (path === '/admin' || path.startsWith('/admin/')) {
-    const { data: s } = await sb.auth.getSession();
-    const claims = b64((s?.session?.access_token || '').split('.')[1] || '');
+    const claims = b64((data.session.access_token || '').split('.')[1] || '');
     if (claims?.aal !== 'aal2') return to('/mfa');
   }
   res.headers.set('Cache-Control', 'no-store');

@@ -6,7 +6,7 @@ export const metadata = {
   description: 'Point of sale for Kenyan businesses',
 };
 
-export const viewport = { width: 'device-width', initialScale: 1 };
+export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#FFFDF6' };
 
 export default function RootLayout({ children }) {
   return (

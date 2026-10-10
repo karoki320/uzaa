@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { money, num } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
+import PrintButtons from '@/components/PrintButtons';
 
 export default function POS() {
   const { profile, business, branches } = useAuth();
@@ -230,10 +231,8 @@ export default function POS() {
             <label className="row small" style={{ marginBottom: 12 }}>
               <input type="checkbox" checked={auto} onChange={(e) => toggleAuto(e.target.checked)} /> Print receipt automatically after each sale
             </label>
-            <div className="row">
-              <button className="btn" onClick={() => window.print()}>Print receipt</button>
-              <button className="btn primary grow" onClick={closeReceipt}>New sale</button>
-            </div>
+            <PrintButtons saleId={done.sale.id} />
+            <button className="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={closeReceipt}>New sale</button>
           </div>
         </Modal>
       )}
