@@ -4,6 +4,10 @@ import { AuthProvider } from '@/lib/auth';
 export const metadata = {
   title: 'Uzaa POS',
   description: 'Point of sale for Kenyan businesses',
+  manifest: '/manifest.webmanifest',
+  applicationName: 'Uzaa',
+  appleWebApp: { capable: true, title: 'Uzaa', statusBarStyle: 'default' },
+  icons: { apple: '/brand/apple-touch-icon.png' },
 };
 
 export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#FFFDF6' };

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import BottomNav from '@/components/BottomNav';
+import InstallApp from '@/components/InstallApp';
 
 const NAV = [
   { href: '/pos', label: 'Sell', roles: ['owner', 'manager', 'cashier'] },
@@ -65,6 +66,7 @@ export default function Shell({ children }) {
         </div>
         <div className="row">
           <span className="small muted desk-only">{profile.full_name} <span className="badge">{profile.role.replace('_', ' ')}</span></span>
+          <span className="desk-only"><InstallApp /></span>
           <button className="btn small desk-only" onClick={signOut}>Sign out</button>
         </div>
       </div>

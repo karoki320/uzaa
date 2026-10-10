@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import InstallApp from '@/components/InstallApp';
 
 // Simple outline icons, one per screen (no emojis).
 const P = {
@@ -16,6 +17,7 @@ const P = {
   '/admin': <><path d="M3 21h18M6 21V8h5v13M13 21V3h5v18" /></>,
   '/security': <><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></>,
   more: <><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></>,
+  dl: <><path d="M12 4v11M7 11l5 5 5-5M5 20h14" /></>,
   out: <><path d="M9 4H5a1 1 0 00-1 1v14a1 1 0 001 1h4M16 8l4 4-4 4M20 12H9" /></>,
 };
 export const Icon = ({ k, size = 24 }) => (
@@ -52,6 +54,7 @@ export default function BottomNav({ items, signOut, who }) {
                 <Icon k={n.href} /><span>{n.label}</span>
               </Link>
             ))}
+            <InstallApp className="sheetinstall" onDone={() => setMore(false)}><Icon k="dl" /><span>Install app on this phone</span></InstallApp>
             <button type="button" onClick={signOut}><Icon k="out" /><span>Sign out</span></button>
           </div>
         </div>

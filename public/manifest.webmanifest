@@ -1,0 +1,23 @@
+{
+  "name": "Uzaa POS",
+  "short_name": "Uzaa",
+  "description": "Point of sale for Kenyan businesses",
+  "id": "/pos",
+  "start_url": "/pos",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FCF9F0",
+  "theme_color": "#FFFDF6",
+  "lang": "en",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New sale", "url": "/pos", "icons": [{ "src": "/brand/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Sales", "url": "/sales", "icons": [{ "src": "/brand/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
