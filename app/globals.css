@@ -202,13 +202,14 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 }
 
 /* ---- till: compact, speed first ---- */
-.posbar { display: flex; align-items: center; gap: 8px; }
-.chips { display: flex; gap: 6px; overflow-x: auto; flex: 1; scrollbar-width: none; padding: 2px 0; }
+.pos > section { min-width: 0; }   /* a grid item defaults to min-width:auto and would be pushed wide by its content */
+.posbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.chips { display: flex; gap: 6px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; padding: 2px 0; }
 .chips::-webkit-scrollbar { display: none; }
 .chips button { flex: none; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; }
 .chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .iconbtn { flex: none; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin-left: auto; }
-.branch-pick { width: auto; max-width: 140px; min-height: 44px; font-size: 13px; }
+.branch-pick { width: 100%; max-width: 280px; min-height: 44px; font-size: 13px; margin-bottom: 8px; }
 .searchrow { display: none; margin-top: 8px; }
 .searchrow.open { display: block; }
 .cart-lines { max-height: 26vh; overflow-y: auto; }
@@ -245,3 +246,12 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 .pendrow { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .installbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--tint); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px; }
 .installbar > div:first-child { flex: 1; min-width: 180px; }
+
+/* ---- credit ---- */
+.debtrow { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); background: none; border-left: 0; border-right: 0; border-top: 0; font: inherit; color: var(--ink); text-align: left; cursor: pointer; min-height: 56px; }
+.debtrow:last-child { border-bottom: 0; }
+.debtrow .amt { font-weight: 800; white-space: nowrap; }
+.debtrow .amt.owing { color: var(--error); }
+.debtrow .amt.clear { color: var(--muted); font-weight: 400; font-size: 14px; }
+.creditrow { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.creditrow .grow { flex: 1; min-height: 44px; }

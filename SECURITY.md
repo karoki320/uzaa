@@ -60,3 +60,11 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 - Offline sales keep their real time (rejected if in the future or older than 45 days) and the price the customer was charged. A price that differs from the list price marks the sale "price differs" for the owner. Online sales always use the server price.
 - Sales upload only under the login that made them. Signing out keeps unsent sales on the phone and warns first.
 - Non-cash offline payments need the payment code (for example the M-Pesa code) so the owner can check it later.
+
+## Credit sales
+
+- Switched on per business. Credit is a payment method: the sale is saved and stock moves as usual, the sale stays unpaid and carries the customer.
+- The database, not the browser, enforces it: credit off, no customer, an unknown customer, a deposit larger than the sale, or going past the customer's limit are all refused inside `create_sale`.
+- The limit is the business default unless that customer has their own. 0 means no limit.
+- Credit sales cannot be made offline, because the limit can only be checked on the server.
+- A balance can never go below zero. Customers and payments are row-level-secured to the business; only an owner may delete either, and a payment records who took it.

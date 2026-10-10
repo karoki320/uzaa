@@ -10,6 +10,7 @@ const P = {
   '/sales': <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></>,
   '/products': <><path d="M3 8l9-5 9 5v8l-9 5-9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></>,
   '/stock': <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
+  '/credit': <><path d="M3 7h18v10H3z" /><circle cx="12" cy="12" r="2.5" /><path d="M7 12h.01M17 12h.01" /></>,
   '/reports': <><path d="M4 20h16" /><path d="M6 16l4-5 3 3 5-7" /></>,
   '/branches': <><path d="M3 21h18M5 21V9l7-5 7 5v12" /><path d="M10 21v-6h4v6" /></>,
   '/staff': <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 3-6 6.5-6s6.5 2.4 6.5 6" /><path d="M16 5.2a3.5 3.5 0 010 5.6M18 14.4c2 .7 3.5 2.5 3.5 5.6" /></>,

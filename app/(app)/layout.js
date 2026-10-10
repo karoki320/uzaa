@@ -15,6 +15,7 @@ const NAV = [
   { href: '/sales', label: 'Sales', roles: ['owner', 'manager', 'cashier'] },
   { href: '/products', label: 'Products', roles: ['owner', 'manager'] },
   { href: '/stock', label: 'Stock', roles: ['owner', 'manager'] },
+  { href: '/credit', label: 'Credit', roles: ['owner', 'manager', 'cashier'] },
   { href: '/reports', label: 'Reports', roles: ['owner', 'manager'] },
   { href: '/branches', label: 'Branches', roles: ['owner'] },
   { href: '/staff', label: 'Staff', roles: ['owner'] },

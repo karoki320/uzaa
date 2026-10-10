@@ -93,6 +93,8 @@ export default function Settings() {
     receipt_mode: business.receipt_mode || 'always',
     barcode_enabled: business.barcode_enabled !== false,
     payment_methods: (business.payment_methods || []).join(', '),
+    credit_enabled: !!business.credit_enabled,
+    credit_limit: business.credit_limit ?? 5000,
   });
   const [fields, setFields] = useState(business.custom_fields || []);
   const [msg, setMsg] = useState('');
@@ -118,6 +120,7 @@ export default function Settings() {
       receipt_header: f.receipt_header, receipt_footer: f.receipt_footer,
       receipt_mode: f.receipt_mode, barcode_enabled: !!f.barcode_enabled,
       payment_methods: methods, custom_fields: cleaned,
+      credit_enabled: !!f.credit_enabled, credit_limit: Math.max(0, Number(f.credit_limit) || 0),
     }).eq('id', business.id);
     setBusy(false);
     if (error) return setErr(error.message);
@@ -169,6 +172,28 @@ export default function Settings() {
           <input type="checkbox" checked={f.barcode_enabled} onChange={(e) => setF({ ...f, barcode_enabled: e.target.checked })} /> My business uses barcodes
         </label>
         <p className="muted small" style={{ margin: 0 }}>Turn this off if you never scan. The barcode box and scan prompt are hidden; you still search by name. Barcodes you already saved are kept.</p>
+      </div>
+
+      <div className="card">
+        <h3>Credit sales (deni)</h3>
+        <label className="row" style={{ marginBottom: 6 }}>
+          <input type="checkbox" checked={f.credit_enabled} onChange={(e) => setF({ ...f, credit_enabled: e.target.checked })} /> Let my customers take goods on credit
+        </label>
+        <p className="muted small" style={{ marginTop: 0 }}>
+          Credit appears as a payment method at the till. The sale is saved and stock goes down as usual, but it stays
+          unpaid and is recorded against the customer. You keep the list of who owes what under Credit.
+        </p>
+        {f.credit_enabled && (
+          <>
+            <label className="field" style={{ maxWidth: 280 }}><span>Most one customer may owe ({f.currency})</span>
+              <input className="input" inputMode="decimal" value={f.credit_limit} onChange={set('credit_limit')} />
+            </label>
+            <p className="muted small" style={{ margin: 0 }}>
+              A cashier cannot sell on credit past this amount. Put 0 for no limit. You can set a different limit for
+              one customer on their own page.
+            </p>
+          </>
+        )}
       </div>
 
       <div className="card">
