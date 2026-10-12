@@ -74,6 +74,7 @@ revoke execute on function create_business_as_agent(uuid, text, text, text, text
 grant execute on function create_business_as_agent(uuid, text, text, text, text, text, text, jsonb) to authenticated;
 
 -- 5. the agent's own list ---------------------------------------------
+drop function if exists agent_businesses();
 create or replace function agent_businesses()
 returns table(id uuid, name text, business_type text, status text, owner_email text, owner_name text,
               invited_at timestamptz, created_at timestamptz, joined boolean)
@@ -93,6 +94,7 @@ grant execute on function agent_businesses() to authenticated;
 alter function agent_businesses() set search_path = public, auth;
 
 -- 6. the super admin's view of the sales team -------------------------
+drop function if exists admin_agents();
 create or replace function admin_agents()
 returns table(id uuid, full_name text, email text, active boolean, created_at timestamptz,
               signed bigint, live bigint, pending bigint)

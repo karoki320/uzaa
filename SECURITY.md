@@ -98,3 +98,8 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 - The till posts only a sale id. The server reads the sale back, and sends nothing unless the caller is that sale's cashier in that business. Owners are the only recipients, and nothing is sent when an owner rang the sale up themselves.
 - Which alerts to send is a business setting an owner alone can change; a cashier's update is refused by row level security.
 - The end-of-day summary runs from an hourly scheduled job that must present CRON_SECRET, and `day_summary` is executable only by the service role.
+
+## Never lock someone out of their own till
+
+- The terms gate only appears when the database can actually record the acceptance. If the patch adding `profiles.terms_accepted_at` has not been run, the field is absent and nobody is held at the door; if `accept_terms()` is missing, accepting lets the person through anyway. A screen about paperwork must never stand between an owner and their shop.
+- `/api/auth/me` now separates "this person has no business" from "the business could not be read". A failed read shows a plain message with a Try again button instead of sending a perfectly good account off to create a second one.

@@ -18,8 +18,11 @@ export async function GET() {
   const out = { user: { id: data.user.id, email: data.user.email }, aal, needsMfa, mfaEnrolled: enrolled };
   if (needsMfa) return NextResponse.json({ ...out, mustEnrol: false, role: null }, { headers: h });
 
-  const { data: profile } = await sb.from('profiles').select('*, businesses(*, branches(*))').eq('id', data.user.id)
+  const { data: profile, error: pErr } = await sb.from('profiles').select('*, businesses(*, branches(*))').eq('id', data.user.id)
     .order('created_at', { referencedTable: 'businesses.branches' }).maybeSingle();
+  // A failed read is not the same as having no business. Saying so stops someone with a perfectly good
+  // account being sent off to create another one.
+  if (pErr) return NextResponse.json({ ...out, profileError: pErr.message || 'Could not load your business' }, { headers: h });
   const { businesses, ...p } = profile || {};
   const { branches, ...business } = businesses || {};
   return NextResponse.json({

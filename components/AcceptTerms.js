@@ -15,7 +15,11 @@ export default function AcceptTerms({ name, onDone, onSignOut }) {
     setBusy(true); setErr('');
     const { error } = await supabase.rpc('accept_terms', { p_version: TERMS_VERSION });
     setBusy(false);
-    if (error) return setErr(error.message);
+    // Nothing on this screen is worth locking someone out of their own till for. If it cannot be
+    // recorded (the database patch is not in yet), let them through and carry on.
+    if (error && error.code !== 'PGRST202' && !/could not find the function/i.test(error.message || '')) {
+      return setErr('That could not be saved just now. Try again, or sign out and back in.');
+    }
     onDone();
   }
 

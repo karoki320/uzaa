@@ -46,15 +46,33 @@ export default function Shell({ children }) {
     if (loading) return;
     if (!session) router.replace('/login');
     else if (me?.needsMfa) router.replace('/mfa');
-    else if (!profile) router.replace('/signup');
+    else if (!profile && !me?.profileError) router.replace('/signup');
     else if (me?.mustEnrol && !path.startsWith('/security')) router.replace('/security?setup=1');
     else if (!allowed && items.length) router.replace(items[0].href);
   }, [loading, session, me, profile, allowed, items.length, path, router]); // eslint-disable-line
 
+  if (!loading && session && me?.profileError) {
+    return (
+      <div className="auth">
+        <div className="card">
+          <h2>We could not load your business</h2>
+          <p className="muted">
+            You are signed in, but Uzaa could not read your business just now. Your data is not lost. Try again in a
+            moment; if it keeps happening, send this to Uzaa support: {me.profileError}
+          </p>
+          <button className="btn primary" style={{ width: '100%' }} onClick={() => reload()}>Try again</button>
+          <button className="btn" style={{ width: '100%', marginTop: 8 }} onClick={rawSignOut}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading || !session || !profile) return <div className="center">Loading...</div>;
 
-  // everyone accepts the terms once before they can go on
-  if (!profile.terms_accepted_at) {
+  // Everyone accepts the terms once before they can go on. If the database has not been patched yet the
+  // field is simply absent, and nobody is held at the door for something that cannot be recorded.
+  const termsTracked = Object.prototype.hasOwnProperty.call(profile, 'terms_accepted_at');
+  if (termsTracked && !profile.terms_accepted_at) {
     return <AcceptTerms name={profile.full_name} onDone={reload} onSignOut={rawSignOut} />;
   }
 

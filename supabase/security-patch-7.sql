@@ -30,6 +30,7 @@ drop policy if exists push_own on push_subscriptions;
 create policy push_own on push_subscriptions for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- What one business owes the owner at the end of the day, read by the server when it sends the summary.
+drop function if exists day_summary(uuid, timestamptz, timestamptz);
 create or replace function day_summary(p_business uuid, p_from timestamptz, p_to timestamptz)
 returns table(sales bigint, total numeric, cash numeric, other numeric) language sql stable security definer set search_path = public as $$
   select count(*), coalesce(sum(s.total), 0),

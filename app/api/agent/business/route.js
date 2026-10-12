@@ -28,10 +28,12 @@ export async function POST(req) {
   const name = String(b.name || '').trim();
   const ownerName = String(b.owner_name || '').trim();
   const branch = String(b.branch || '').trim() || 'Main Branch';
+  const phone = String(b.owner_phone || '').trim().slice(0, 20);
   const type = TYPE_PRESETS[b.type] ? b.type : 'retail';
   const email = normEmail(b.owner_email);
   if (!name || name.length > 120) return bad('Enter the business name');
-  if (!ownerName || ownerName.length > 120) return bad("Enter the owner's name");
+  if (!ownerName || ownerName.length > 120) return bad('Enter the name of the proprietor');
+  if (phone.replace(/\D/g, '').length < 9) return bad("Enter the proprietor's phone number");
   if (!emailOk(email)) return bad("Enter the owner's email address");
 
   // the owner gets an email, opens the link and chooses their own password
@@ -42,7 +44,7 @@ export async function POST(req) {
   const usr = await userClient();
   const { data: bid, error } = await usr.rpc('create_business_as_agent', {
     p_owner: inv.user.id, p_name: name, p_type: type, p_owner_name: ownerName, p_owner_email: email,
-    p_branch: branch, p_item_label: preset.item_label, p_custom_fields: preset.custom_fields,
+    p_branch: branch, p_item_label: preset.item_label, p_custom_fields: preset.custom_fields, p_owner_phone: phone,
   });
   if (error || !bid) {
     await sb.auth.admin.deleteUser(inv.user.id);     // nothing half-made is left behind
