@@ -16,15 +16,19 @@ export async function POST(req) {
   if (!full_name || full_name.length > 120) return bad('Enter your name');
   if (b.terms !== true) return bad('Tick the box to accept the terms before you continue');
 
-  const l = await hitIp('signup', req, LIMITS.signupIp); if (l) return l;
   const sb = await userClient();
 
-  // Already confirmed and signed in, but no business yet: just create the business.
+  // Already confirmed and signed in. If they have a business, send them to it; if not, create it.
+  // This path does not count against the signup limit: it creates no new account.
   const { data: cur } = await sb.auth.getUser();
   if (cur?.user && !b.email) {
+    const { data: mine } = await sb.from('profiles').select('id').eq('id', cur.user.id).maybeSingle();
+    if (mine) return ok({ next: '/home' });
     const done = await registerFromMeta(sb, { ...cur.user, user_metadata: { business, full_name, type } });
-    return done ? ok({ next: '/pos' }) : bad('Could not set up your business');
+    return done ? ok({ next: '/pos' }) : bad('Could not set up your business. Sign out, sign in again and retry.');
   }
+
+  const l = await hitIp('signup', req, LIMITS.signupIp); if (l) return l;
 
   const email = normEmail(b.email);
   if (!emailOk(email)) return bad('Enter a valid email');

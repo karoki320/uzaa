@@ -16,6 +16,14 @@ Run order for the database: `schema.sql` (new installs) or `security-patch.sql` 
 | Passwords | 12+ characters with upper, lower, number and symbol; common and obvious passwords blocked; checked against known breaches (Have I Been Pwned, k-anonymity, only 5 hash characters leave the server); live strength meter. Enforced on the server for signup, reset, change, and staff passwords. |
 | Failed attempts | Logged to `auth_events` (emails stored only as keyed hashes). Kept 180 days. |
 
+## Patch 9: admin sign-in by email link (replaces the authenticator app for the super admin)
+- Password accepted -> that browser session waits, and Uzaa emails a sign-in link to the admin address (Supabase "Magic link" template).
+- Opening the link on any device approves the waiting session for 12 hours; the computer continues by itself. Opened in the same browser, that browser goes straight to /admin.
+- The link only approves a session that entered the password in the last hour. A link on its own (without the password) opens nothing.
+- Enforced in the database: `auth_ok()` accepts the super admin when the token is aal2 OR its `session_id` is approved in `admin_steps`.
+- An authenticator app, if one was set up, still works as an alternative on the same screen.
+- Fixed: owners were sent to "create business" because `businesses.agent_id` made the profiles -> businesses link ambiguous. `/api/auth/me` now reads profile, business and branches separately.
+
 ## What changed in this round
 1. Cookie sessions with a same-origin data gateway, replacing browser-held tokens.
 2. New screens: Forgot password, Reset password / accept invite, Two-step code, Security (password, email, 2FA, backup codes).

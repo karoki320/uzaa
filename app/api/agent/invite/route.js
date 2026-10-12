@@ -1,6 +1,7 @@
 import { bad, ok, userClient, adminClient, serverReady, sameOrigin, readJson, normEmail, emailOk, clientIp, logEvent } from '@/lib/server';
 import { hit } from '@/lib/ratelimit';
 
+import { secondStepMissing } from '@/lib/adminstep';
 export const dynamic = 'force-dynamic';
 
 // The super admin adds someone to the sales team. They get an email and choose their own password.
@@ -8,8 +9,7 @@ async function boss(sb) {
   const me = await userClient();
   const { data } = await me.auth.getUser();
   if (!data?.user) return null;
-  const { data: aal } = await me.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.currentLevel !== 'aal2') return null;            // the super admin always needs 2FA
+  if (await secondStepMissing(me, sb, data.user.id)) return null;   // the super admin always needs the second step
   const { data: p } = await sb.from('profiles').select('id,role,active').eq('id', data.user.id).maybeSingle();
   return p && p.role === 'super_admin' && p.active ? p : null;
 }

@@ -1,6 +1,7 @@
 import { bad, ok, userClient, adminClient, serverReady, sameOrigin, readJson, clientIp, logEvent } from '@/lib/server';
 import { hit, LIMITS } from '@/lib/ratelimit';
 import { checkPassword } from '@/lib/pwned';
+import { roleOf } from '@/lib/adminstep';
 export const dynamic = 'force-dynamic';
 
 // Sets a new password for the person who just opened a reset or invite link (they hold a session from /auth/confirm).
@@ -13,7 +14,8 @@ export async function POST(req) {
   if (!data?.user) return bad('This link has expired. Request a new one.', 401, { expired: true });
   const l = await hit('changepw', data.user.id, LIMITS.changeUser); if (l) return l;
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') return bad('Enter your authenticator code first.', 403, { mfa: true });
+  const isAdmin = (await roleOf(adminClient(), data.user.id)) === 'super_admin';   // the reset link already proved the admin email
+  if (!isAdmin && aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') return bad('Enter your authenticator code first.', 403, { mfa: true });
   const err = await checkPassword(b.password, data.user.email);
   if (err) return bad(err);
   const { error } = await sb.auth.updateUser({ password: b.password });

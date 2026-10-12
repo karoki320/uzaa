@@ -9,7 +9,7 @@ import { post, go } from '@/lib/api';
 import { TYPE_PRESETS } from '@/lib/util';
 
 export default function Signup() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, me, loading } = useAuth();
   const [f, setF] = useState({ full_name: '', email: '', password: '', business: '', type: 'retail' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -22,7 +22,8 @@ export default function Signup() {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   if (loading) return <div className="center">Loading...</div>;
-  if (session && profile) {
+  // Signed in already with a business (or the business just failed to load): never offer a second one.
+  if (session && (profile || me?.profileError || me?.needsMfa)) {
     go('/home');
     return null;
   }

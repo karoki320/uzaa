@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 // Runs before every app page: refreshes the cookie session, sends signed-out visitors to /login,
-// and keeps /admin for a super admin who has passed two-step verification.
+// The admin second step is enforced in the database and by /api/auth/me.
 // 30 days, so people stay signed in on their own phone. Without maxAge these become session cookies
 // and everyone is asked to sign in again as soon as they close the app.
 const COOKIE = {
@@ -11,8 +11,6 @@ const COOKIE = {
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
 };
 const PROTECTED = ['/pos', '/products', '/stock', '/sales', '/reports', '/staff', '/branches', '/settings', '/security', '/admin', '/agent', '/home'];
-
-const b64 = (s) => { try { return JSON.parse(atob(s.replace(/-/g, '+').replace(/_/g, '/'))); } catch { return null; } };
 
 export async function middleware(req) {
   const path = req.nextUrl.pathname;
@@ -37,10 +35,8 @@ export async function middleware(req) {
   const to = (p) => { const u = req.nextUrl.clone(); u.pathname = p; u.search = ''; return NextResponse.redirect(u); };
   if (!data?.session) return to('/login');
 
-  if (path === '/admin' || path.startsWith('/admin/')) {
-    const claims = b64((data.session.access_token || '').split('.')[1] || '');
-    if (claims?.aal !== 'aal2') return to('/mfa');
-  }
+  // /admin's second step (emailed link, or authenticator app) is checked by /api/auth/me, which sends the
+  // screen to /mfa, and by the database itself: without it no admin data opens (auth_ok).
   res.headers.set('Cache-Control', 'no-store');
   return res;
 }

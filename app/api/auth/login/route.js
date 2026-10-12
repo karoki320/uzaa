@@ -1,4 +1,5 @@
 import { bad, ok, userClient, adminClient, serverReady, sameOrigin, readJson, normEmail, emailOk, clientIp, logEvent } from '@/lib/server';
+import { startStep, claimsOf } from '@/lib/adminstep';
 import { hitIp, lockState, noteFailure, clearFailures, loginKeys, verifyCaptcha, captchaConfigured, LIMITS, CAPTCHA_AFTER, IP_FREE, IP_LOCK_AT } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
@@ -42,9 +43,15 @@ export async function POST(req) {
   await Promise.all([clearFailures(keys.acct), clearFailures(keys.ip)]);
   await logEvent(admin, 'login', { email, ip, success: true });
 
+  const { data: prof } = await admin.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+  if (prof?.role === 'super_admin') {
+    // Second step by email: this session waits until the link we send to the admin address is opened.
+    const sid = claimsOf(data.session.access_token).session_id;
+    const sent = await startStep(sb, admin, data.user, sid, req);
+    await logEvent(admin, 'admin_step_sent', { email, ip, success: sent });
+    return ok({ next: '/mfa', emailStep: true, sent });
+  }
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') return ok({ mfa: true, next: '/mfa' });
-  const { data: prof } = await sb.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
-  if (prof?.role === 'super_admin') return ok({ next: '/security?setup=1' });   // no factor yet: must enrol before anything opens
   return ok({ next: '/home' });
 }

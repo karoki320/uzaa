@@ -1,5 +1,6 @@
 import { bad, ok, userClient, adminClient, serverReady, sameOrigin, readJson, normEmail, emailOk, clientIp, logEvent } from '@/lib/server';
 import { hit, LIMITS } from '@/lib/ratelimit';
+import { secondStepMissing } from '@/lib/adminstep';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
@@ -11,8 +12,7 @@ export async function POST(req) {
   const sb = await userClient();
   const { data } = await sb.auth.getUser();
   if (!data?.user) return bad('Sign in again', 401);
-  const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') return bad('Enter your authenticator code first.', 403, { mfa: true });
+  if (await secondStepMissing(sb, adminClient(), data.user.id)) return bad('Finish the second sign-in step first.', 403, { mfa: true });
   const l = await hit('chgemail', data.user.id, LIMITS.changeUser); if (l) return l;
   const { error } = await sb.auth.updateUser({ email });
   await logEvent(adminClient(), 'email_change', { email: data.user.email, ip: clientIp(req), success: !error });

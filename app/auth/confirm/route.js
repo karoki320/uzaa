@@ -1,6 +1,7 @@
 import { userClient, serverReady, clientIp, adminClient, logEvent } from '@/lib/server';
 import { hitIp } from '@/lib/ratelimit';
 import { hop, afterVerify } from '@/lib/authhop';
+import { sessionInfo } from '@/lib/adminstep';
 
 export const dynamic = 'force-dynamic';
 const TYPES = ['signup', 'recovery', 'magiclink', 'invite', 'email_change', 'email'];
@@ -15,9 +16,10 @@ export async function GET(req) {
   if (await hitIp('confirm', req, { limit: 20, window: 900 })) return hop('/login?e=link');
 
   const sb = await userClient();
+  const prior = await sessionInfo(sb);   // the session this browser had before the link, if any
   const { data, error } = await sb.auth.verifyOtp({ token_hash, type });
   await logEvent(adminClient(), `confirm_${type}`, { email: data?.user?.email, ip: clientIp(req), success: !error });
   if (error || !data?.user) return hop(`/login?e=${type === 'recovery' ? 'reset_expired' : 'link'}`);
 
-  return afterVerify(sb, data.user, url, type);
+  return afterVerify(sb, data.user, url, type, prior.uid === data.user.id ? prior.sid : null, data.session?.access_token);
 }
