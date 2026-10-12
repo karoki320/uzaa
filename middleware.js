@@ -3,7 +3,9 @@ import { createServerClient } from '@supabase/ssr';
 
 // Runs before every app page: refreshes the cookie session, sends signed-out visitors to /login,
 // and keeps /admin for a super admin who has passed two-step verification.
-const COOKIE = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' };
+// 30 days, so people stay signed in on their own phone. Without maxAge these become session cookies
+// and everyone is asked to sign in again as soon as they close the app.
+const COOKIE = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: 60 * 60 * 24 * 30 };
 const PROTECTED = ['/pos', '/products', '/stock', '/sales', '/reports', '/staff', '/branches', '/settings', '/security', '/admin', '/agent', '/home'];
 
 const b64 = (s) => { try { return JSON.parse(atob(s.replace(/-/g, '+').replace(/_/g, '/'))); } catch { return null; } };

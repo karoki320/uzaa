@@ -58,3 +58,10 @@ Authentication > URL Configuration: set Site URL to https://uzaa.co.ke and add h
 
 ## Why the links look different
 Every button points to https://uzaa.co.ke/auth/confirm?token_hash=...&type=... (not Supabase's own link). Uzaa checks the one-time token on its own server, sets the secure session cookie, then sends the person to the right screen: choose a password (reset and invite), the app (signup, magic link) or Security (email change). Links work once and expire after an hour.
+
+## 5. Phone alerts for owners (optional)
+
+1. Make a key pair once: `npx web-push generate-vapid-keys`.
+2. In Vercel, add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:hello@biziirise.com) and a long random `CRON_SECRET`.
+3. Redeploy. `vercel.json` already schedules the hourly job that sends end-of-day summaries.
+4. An owner turns them on in Settings, on each phone they use. On iPhone, Uzaa must be installed to the home screen first.

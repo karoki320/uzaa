@@ -213,6 +213,7 @@ export default function POS() {
     finish();
     loadStock();
     syncQueue(session?.user?.id);   // also send anything that was waiting
+    post('/api/push/sale', { sale_id: id });   // the owner's phone, if they asked for it
     const info = { id, no: row?.receipt_no, total: row?.total, change: Math.max(0, Number(row?.amount_paid || 0) - Number(row?.total || 0)), url: '', failed: false };
     setFlash(info);
     if (withPrint) {

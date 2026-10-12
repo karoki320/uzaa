@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import InstallApp from '@/components/InstallApp';
+import AlertSettings from '@/components/AlertSettings';
 import { TYPE_PRESETS, slug } from '@/lib/util';
 
 function Categories({ businessId }) {
@@ -93,6 +94,9 @@ export default function Settings() {
     receipt_mode: business.receipt_mode || 'always',
     barcode_enabled: business.barcode_enabled !== false,
     payment_methods: (business.payment_methods || []).join(', '),
+    notify_mode: business.notify_mode || 'off',
+    notify_hour: business.notify_hour ?? 20,
+    notify_min: business.notify_min ?? 0,
     credit_enabled: !!business.credit_enabled,
     credit_limit: business.credit_limit ?? 5000,
   });
@@ -121,6 +125,8 @@ export default function Settings() {
       receipt_mode: f.receipt_mode, barcode_enabled: !!f.barcode_enabled,
       payment_methods: methods, custom_fields: cleaned,
       credit_enabled: !!f.credit_enabled, credit_limit: Math.max(0, Number(f.credit_limit) || 0),
+      notify_mode: f.notify_mode, notify_hour: Math.min(23, Math.max(0, Number(f.notify_hour) || 0)),
+      notify_min: Math.max(0, Number(f.notify_min) || 0),
     }).eq('id', business.id);
     setBusy(false);
     if (error) return setErr(error.message);
@@ -172,6 +178,39 @@ export default function Settings() {
           <input type="checkbox" checked={f.barcode_enabled} onChange={(e) => setF({ ...f, barcode_enabled: e.target.checked })} /> My business uses barcodes
         </label>
         <p className="muted small" style={{ margin: 0 }}>Turn this off if you never scan. The barcode box and scan prompt are hidden; you still search by name. Barcodes you already saved are kept.</p>
+      </div>
+
+      <div className="card">
+        <h3>Alerts on your phone</h3>
+        <p className="muted small" style={{ marginTop: 0 }}>
+          Uzaa can buzz your phone when your cashiers sell. Only you, the owner, get these. Your staff never do.
+        </p>
+        <label className="field" style={{ maxWidth: 360 }}><span>Tell me about</span>
+          <select className="input" value={f.notify_mode} onChange={set('notify_mode')}>
+            <option value="off">Nothing, leave my phone alone</option>
+            <option value="sale">Every sale a cashier makes</option>
+            <option value="daily">One summary at the end of the day</option>
+          </select>
+        </label>
+        {f.notify_mode === 'sale' && (
+          <label className="field" style={{ maxWidth: 360 }}><span>Only sales of at least ({f.currency}), 0 for all of them</span>
+            <input className="input" inputMode="decimal" value={f.notify_min} onChange={set('notify_min')} />
+          </label>
+        )}
+        {f.notify_mode === 'daily' && (
+          <label className="field" style={{ maxWidth: 200 }}><span>Send it at</span>
+            <select className="input" value={f.notify_hour} onChange={set('notify_hour')}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>{`${String(h).padStart(2, '0')}:00`}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {f.notify_mode !== 'off' && (
+          <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 12 }}>
+            <AlertSettings />
+          </div>
+        )}
       </div>
 
       <div className="card">

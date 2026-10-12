@@ -87,3 +87,14 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 
 - Uzaa's templates send people to `/auth/confirm?token_hash=...&type=...`, verified on the server; the session becomes an httpOnly cookie and the reply is a meta-refresh hop so the Strict cookie is sent on the next request.
 - Supabase's default templates instead land on the site root with `?code=...`. The root rewrite now sends `?code=`, `?error=` and `?token_hash=` to the handler that can finish them, so such a link no longer shows the sales page. A code link can only complete in the browser that requested it (the PKCE verifier is a cookie), and never for an invite; that case gets a message saying what to do instead.
+
+## Staying signed in
+
+- The middleware rewrites the session cookies on every guarded page. It was setting them without a lifetime, which made them session cookies: everyone was asked to sign in again as soon as they closed the browser or the installed app. They now carry the same 30 days as the cookies the API routes set.
+
+## Phone alerts
+
+- Web push with a VAPID pair held only on the server. A subscription row belongs to one user, with a unique endpoint, and row level security lets a person see and change only their own: verified on a real Postgres with Supabase's grants in place, where a cashier sees only their own and a sales agent sees none.
+- The till posts only a sale id. The server reads the sale back, and sends nothing unless the caller is that sale's cashier in that business. Owners are the only recipients, and nothing is sent when an owner rang the sale up themselves.
+- Which alerts to send is a business setting an owner alone can change; a cashier's update is refused by row level security.
+- The end-of-day summary runs from an hourly scheduled job that must present CRON_SECRET, and `day_summary` is executable only by the service role.

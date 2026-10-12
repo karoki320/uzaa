@@ -1,6 +1,6 @@
 // Uzaa service worker. Caches only public static files (app shell assets, fonts, icons).
 // It never caches pages, API calls or anything that belongs to a signed-in user.
-const V = 'uzaa-static-v2';
+const V = 'uzaa-static-v3';
 const SHELL = ['/pos', '/sales'];   // the empty app shell for the till; it holds no user data
 const PRE = ['/offline.html', '/brand/icon-192.png', '/brand/icon-512.png', '/brand/logo-wordmark.svg', '/brand/logo-mark.svg'];
 
@@ -45,4 +45,29 @@ self.addEventListener('fetch', (e) => {
       }))
     );
   }
+});
+
+// ---- alerts ----
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Uzaa', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Uzaa', {
+    body: d.body || '',
+    icon: '/brand/icon-192.png',
+    badge: '/brand/icon-192.png',
+    tag: d.tag || 'uzaa',
+    data: { url: d.url || '/home' },
+    renotify: false,
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const to = (e.notification.data && e.notification.data.url) || '/home';
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const c of list) {
+      if (c.url.includes(self.location.origin) && 'focus' in c) { c.navigate(to); return c.focus(); }
+    }
+    return clients.openWindow(to);
+  }));
 });
