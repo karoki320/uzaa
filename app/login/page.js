@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -19,6 +19,8 @@ function Form() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState(NOTES[q.get('e')] || '');
   const [info, setInfo] = useState('');
+  // filled in when someone is sent here from the signup page
+  useEffect(() => { const e = q.get('email'); if (e) setEmail(e); }, [q]);
   const [busy, setBusy] = useState(false);
   const [needCaptcha, setNeedCaptcha] = useState(false);
   const [token, setToken] = useState('');

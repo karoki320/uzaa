@@ -34,7 +34,17 @@ export async function POST(req) {
 
   const { data, error } = await sb.auth.signUp({ email, password: b.password, options: { data: { business, full_name, type } } });
   await logEvent(adminClient(), 'signup', { email, ip: clientIp(req), success: !error });
-  if (error) return bad('Could not create that account. If you already have one, sign in instead.');
+  if (error) {
+    if (/already (registered|exists)/i.test(error.message || '') || error.code === 'user_already_exists') {
+      return bad('You already have an Uzaa account with this email. Sign in instead.', 400, { signIn: true });
+    }
+    return bad('Could not create that account. If you already have one, sign in instead.');
+  }
+  // With email confirmation on, Supabase hides whether the address exists by returning a user with no
+  // identities. That is the case that used to look like a brand new signup and then went nowhere.
+  if (!data.session && Array.isArray(data.user?.identities) && data.user.identities.length === 0) {
+    return bad('You already have an Uzaa account with this email. Sign in instead.', 400, { signIn: true });
+  }
   if (data.session) {   // email confirmation is switched off in Supabase: finish setting up now
     const done = await registerFromMeta(sb, data.user);
     return done ? ok({ next: '/pos' }) : bad('Account created, but the business could not be set up. Sign in to retry.');

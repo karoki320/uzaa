@@ -18,6 +18,7 @@ export default function Signup() {
   const [ck, setCk] = useState(0);
   const [needCaptcha, setNeedCaptcha] = useState(false);
   const [terms, setTerms] = useState(false);
+  const [exists, setExists] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   if (loading) return <div className="center">Loading...</div>;
@@ -38,6 +39,7 @@ export default function Signup() {
     setBusy(false);
     setErr(r.data.error || 'Something went wrong');
     if (r.data.captcha) { setNeedCaptcha(true); setToken(''); setCk((k) => k + 1); }
+    setExists(!!r.data.signIn);
   }
 
   async function resend() {
@@ -95,6 +97,11 @@ export default function Signup() {
           <span>I have read and accept the <Link href="/terms" target="_blank">terms of service</Link>.</span>
         </label>
         {err && <div className="err" role="alert">{err}</div>}
+        {exists && (
+          <Link className="btn primary" href={`/login?email=${encodeURIComponent(f.email)}`} style={{ display: 'block', textAlign: 'center', textDecoration: 'none', lineHeight: '28px', marginBottom: 8 }}>
+            Sign in to my business
+          </Link>
+        )}
         <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Setting up...' : 'Create my business'}</button>
       </form>
       <p className="muted">Already have an account? <Link href="/login">Sign in</Link></p>
