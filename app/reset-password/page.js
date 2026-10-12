@@ -25,7 +25,7 @@ function Form() {
     if (pw !== pw2) return setErr('The two passwords do not match');
     setBusy(true);
     const r = await post('/api/auth/reset', { password: pw });
-    if (r.ok) return go(r.data.next || '/home');
+    if (r.ok) return go(me?.mfaMode === 'email' ? '/login?e=admin_reset' : (r.data.next || '/home'));
     setBusy(false);
     if (r.data.mfa) return go('/mfa?next=/reset-password');
     setErr(r.data.error || 'Something went wrong');
@@ -44,7 +44,9 @@ function Form() {
       </div>
     );
   }
-  if (me.needsMfa) { go('/mfa?next=/reset-password'); return null; }
+  // The admin's second step is the emailed link, and this reset link already came to that inbox, so the
+  // admin can choose a new password here. After saving, they sign in with it and get the usual link.
+  if (me.needsMfa && me.mfaMode !== 'email') { go('/mfa?next=/reset-password'); return null; }
 
   return (
     <div className="auth">

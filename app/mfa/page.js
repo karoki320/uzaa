@@ -38,6 +38,7 @@ function EmailStep({ me, safe, onUseApp }) {
         <h2>Sign in with your password</h2>
         <p className="muted">For the admin account, the email link only approves a sign-in that started with your password, or the link has expired. Sign in again and we will send a fresh link.</p>
         <button className="btn primary" style={{ width: '100%' }} onClick={out}>Sign in again</button>
+        <button className="btn" style={{ width: '100%' }} onClick={async () => { await post('/api/auth/logout'); go('/forgot-password'); }}>I forgot my password</button>
       </div>
     );
   }
