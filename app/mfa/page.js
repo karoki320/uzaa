@@ -46,7 +46,7 @@ function EmailStep({ me, safe, onUseApp }) {
     <div className="card stack" role="status">
       <h2>Check your email</h2>
       <p>We sent a sign-in link to <b>{mask(me.user?.email)}</b>. Open it on this device or on your phone.</p>
-      <p className="muted small">Keep this page open. It continues by itself once the link is opened. The link works once and expires in an hour.</p>
+      <p className="muted small">Tap the link and the admin opens there. This page also continues by itself. After that, this device is remembered for 30 days and only needs your password.</p>
       {msg && <div className="ok" role="status">{msg}</div>}
       {err && <div className="err" role="alert">{err}</div>}
       <div className="row between" style={{ marginTop: 8 }}>

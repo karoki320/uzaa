@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { userClient, adminClient } from '@/lib/server';
-import { claimsOf, stepState } from '@/lib/adminstep';
+import { cookies } from 'next/headers';
+import { claimsOf, stepState, trustOk, approveSession, TRUST_COOKIE } from '@/lib/adminstep';
 export const dynamic = 'force-dynamic';
 
 // One call gives the app everything it needs to start: who you are, your second-step state, your profile,
@@ -31,9 +32,14 @@ export async function GET() {
   if (profile?.role === 'super_admin') {
     mfaMode = 'email';
     if (aal !== 'aal2') {
-      const st = await stepState(adminClient(), uid, c.session_id);
+      const admin = adminClient();
+      const st = await stepState(admin, uid, c.session_id);
       needsMfa = !st.approved;
       stepPending = st.pending;
+      if (needsMfa && trustOk(uid, (await cookies()).get(TRUST_COOKIE)?.value)) {
+        await approveSession(admin, uid, c.session_id);
+        needsMfa = false;
+      }
     }
   } else {
     needsMfa = enrolled && aal !== 'aal2';

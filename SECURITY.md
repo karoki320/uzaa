@@ -21,6 +21,8 @@ Run order for the database: `schema.sql` (new installs) or `security-patch.sql` 
 - Opening the link on any device approves the waiting session for 12 hours; the computer continues by itself. Opened in the same browser, that browser goes straight to /admin.
 - The link only approves a session that entered the password in the last hour. A link on its own (without the password) opens nothing.
 - Enforced in the database: `auth_ok()` accepts the super admin when the token is aal2 OR its `session_id` is approved in `admin_steps`.
+- Opening the link approves both the waiting sign-in and the browser it opens in (a phone's Gmail app opens Chrome without the strict cookie).
+- A device that completed the email step is remembered for 30 days (`uz_adev` cookie, signed over the user id): there the password alone is enough. A new device needs password + email.
 - An authenticator app, if one was set up, still works as an alternative on the same screen.
 - Fixed: owners were sent to "create business" because `businesses.agent_id` made the profiles -> businesses link ambiguous. `/api/auth/me` now reads profile, business and branches separately.
 

@@ -1,5 +1,6 @@
 import { bad, ok, userClient, adminClient, serverReady, sameOrigin, readJson, normEmail, emailOk, clientIp, logEvent } from '@/lib/server';
-import { startStep, claimsOf } from '@/lib/adminstep';
+import { cookies } from 'next/headers';
+import { startStep, claimsOf, trustOk, approveSession, TRUST_COOKIE } from '@/lib/adminstep';
 import { hitIp, lockState, noteFailure, clearFailures, loginKeys, verifyCaptcha, captchaConfigured, LIMITS, CAPTCHA_AFTER, IP_FREE, IP_LOCK_AT } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,12 @@ export async function POST(req) {
   if (prof?.role === 'super_admin') {
     // Second step by email: this session waits until the link we send to the admin address is opened.
     const sid = claimsOf(data.session.access_token).session_id;
+    const jar = await cookies();
+    if (trustOk(data.user.id, jar.get(TRUST_COOKIE)?.value)) {   // this device passed the email step before
+      await approveSession(admin, data.user.id, sid);
+      await logEvent(admin, 'admin_trusted_device', { email, ip, success: true });
+      return ok({ next: '/admin' });
+    }
     const sent = await startStep(sb, admin, data.user, sid, req);
     await logEvent(admin, 'admin_step_sent', { email, ip, success: sent });
     return ok({ next: '/mfa', emailStep: true, sent });
