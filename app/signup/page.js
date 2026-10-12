@@ -17,6 +17,7 @@ export default function Signup() {
   const [token, setToken] = useState('');
   const [ck, setCk] = useState(0);
   const [needCaptcha, setNeedCaptcha] = useState(false);
+  const [terms, setTerms] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   if (loading) return <div className="center">Loading...</div>;
@@ -28,7 +29,8 @@ export default function Signup() {
   async function submit(e) {
     e.preventDefault();
     setErr(''); setBusy(true);
-    const body = { business: f.business, type: f.type, full_name: f.full_name, captcha: token };
+    if (!terms) { setBusy(false); return setErr('Tick the box to accept the terms before you continue'); }
+    const body = { business: f.business, type: f.type, full_name: f.full_name, captcha: token, terms: true };
     if (!session) { body.email = f.email; body.password = f.password; }
     const r = await post('/api/auth/signup', body);
     if (r.ok && r.data.confirm) { setNotice(r.data.message); setBusy(false); return; }
@@ -88,6 +90,10 @@ export default function Signup() {
           </>
         )}
         {needCaptcha && captchaOn && <Captcha onToken={setToken} resetKey={ck} />}
+        <label className="terms-tick">
+          <input type="checkbox" checked={terms} onChange={(e) => { setTerms(e.target.checked); setErr(''); }} />
+          <span>I have read and accept the <Link href="/terms" target="_blank">terms of service</Link>.</span>
+        </label>
         {err && <div className="err" role="alert">{err}</div>}
         <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Setting up...' : 'Create my business'}</button>
       </form>

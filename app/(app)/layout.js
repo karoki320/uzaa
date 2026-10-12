@@ -7,10 +7,12 @@ import { useAuth } from '@/lib/auth';
 import BottomNav from '@/components/BottomNav';
 import InstallApp from '@/components/InstallApp';
 import SyncStatus from '@/components/SyncStatus';
+import AcceptTerms from '@/components/AcceptTerms';
 import InstallBanner from '@/components/InstallBanner';
 import { listQueue } from '@/lib/offline';
 
 const NAV = [
+  { href: '/agent', label: 'Businesses', roles: ['sales'] },
   { href: '/pos', label: 'Sell', roles: ['owner', 'manager', 'cashier'] },
   { href: '/sales', label: 'Sales', roles: ['owner', 'manager', 'cashier'] },
   { href: '/products', label: 'Products', roles: ['owner', 'manager'] },
@@ -21,11 +23,11 @@ const NAV = [
   { href: '/staff', label: 'Staff', roles: ['owner'] },
   { href: '/settings', label: 'Settings', roles: ['owner'] },
   { href: '/admin', label: 'All businesses', short: 'Businesses', roles: ['super_admin'] },
-  { href: '/security', label: 'Security', roles: ['owner', 'manager', 'cashier', 'super_admin'] },
+  { href: '/security', label: 'Security', roles: ['owner', 'manager', 'cashier', 'super_admin', 'sales'] },
 ];
 
 export default function Shell({ children }) {
-  const { loading, session, me, profile, business, branches, signOut: rawSignOut } = useAuth();
+  const { loading, session, me, profile, business, branches, reload, signOut: rawSignOut } = useAuth();
   const router = useRouter();
   const path = usePathname();
 
@@ -50,6 +52,11 @@ export default function Shell({ children }) {
   }, [loading, session, me, profile, allowed, items.length, path, router]); // eslint-disable-line
 
   if (loading || !session || !profile) return <div className="center">Loading...</div>;
+
+  // everyone accepts the terms once before they can go on
+  if (!profile.terms_accepted_at) {
+    return <AcceptTerms name={profile.full_name} onDone={reload} onSignOut={rawSignOut} />;
+  }
 
   if (!profile.active || (business && business.status !== 'active')) {
     return (

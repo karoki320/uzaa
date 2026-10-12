@@ -173,12 +173,12 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
   .shell-head { position: sticky; top: 0; z-index: 20; padding: 8px 14px; }
   .page { padding: 12px 12px calc(88px + env(safe-area-inset-bottom)); }
   .bnav {
-    display: grid; grid-template-columns: repeat(5, 1fr);
+    display: flex;   /* shares the width between however many tabs the role has */
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     background: var(--surface); border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .bnav a, .bnav button {
+  .bnav a, .bnav button { flex: 1;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     min-height: 60px; padding: 6px 2px; border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 600;
     color: var(--muted); text-decoration: none; cursor: pointer; position: relative;
@@ -255,3 +255,23 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 .debtrow .amt.clear { color: var(--muted); font-weight: 400; font-size: 14px; }
 .creditrow { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .creditrow .grow { flex: 1; min-height: 44px; }
+
+/* ---- legal pages ---- */
+.legal { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+.legal .brand { display: inline-block; margin-bottom: 20px; }
+.legal h1 { margin: 0 0 4px; }
+.legal h2 { margin: 28px 0 6px; font-size: 19px; }
+.legal p { margin: 0 0 12px; line-height: 1.65; }
+.tickrow { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0; font-size: 15px; line-height: 1.5; }
+.tickrow input { margin-top: 3px; width: 20px; height: 20px; flex: none; }
+
+/* ---- legal pages ---- */
+.legal { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+.legal h1 { margin-bottom: 4px; }
+.legal h2 { font-size: 19px; margin: 28px 0 6px; }
+.legal p { line-height: 1.65; margin: 0 0 12px; }
+.legal a { color: var(--accent); }
+.terms-tick { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 14px; font-size: 15px; line-height: 1.5; }
+.terms-tick input { margin-top: 3px; width: 20px; height: 20px; flex: none; }
+
+.debtrow .badge { white-space: nowrap; }

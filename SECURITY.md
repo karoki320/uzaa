@@ -68,3 +68,17 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 - The limit is the business default unless that customer has their own. 0 means no limit.
 - Credit sales cannot be made offline, because the limit can only be checked on the server.
 - A balance can never go below zero. Customers and payments are row-level-secured to the business; only an owner may delete either, and a payment records who took it.
+
+## Sales team
+
+- A new role, `sales`. A sales agent belongs to Uzaa, not to a shop: no business of their own, and no policy anywhere grants them a shop's products, sales, stock, staff or customers. Verified on a real Postgres: those tables come back "permission denied" for an agent.
+- An agent sees only businesses where `agent_id` is their own id, through `agent_businesses()`, which returns the name, the owner, the status and whether the owner has signed in. One agent cannot see another's.
+- A business an agent creates starts `pending`. `my_role()` and friends return null while a business is not active, so the owner can be invited and set up but no one sells until the super admin activates it.
+- `create_business_as_agent` refuses anyone who is not an active sales agent, and refuses an owner email that already has an account. The server creates the auth user first and deletes it again if the database call fails, so nothing half-made is left.
+- Only the super admin, with 2FA, can add or switch off an agent.
+
+## Terms of service
+
+- Every user accepts once. The date and version live on their profile; `accept_terms()` writes only for the caller.
+- A new owner ticks the box on the signup form; the server refuses a signup without it, and `register_business` records the acceptance.
+- Everyone else is asked at their next sign-in, and nothing else in the app opens until they accept.

@@ -14,6 +14,7 @@ export async function POST(req) {
   const type = TYPE_PRESETS[b.type] ? b.type : 'retail';
   if (!business || business.length > 120) return bad('Enter your business name');
   if (!full_name || full_name.length > 120) return bad('Enter your name');
+  if (b.terms !== true) return bad('Tick the box to accept the terms before you continue');
 
   const l = await hitIp('signup', req, LIMITS.signupIp); if (l) return l;
   const sb = await userClient();

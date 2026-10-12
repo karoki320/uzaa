@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 // Runs before every app page: refreshes the cookie session, sends signed-out visitors to /login,
 // and keeps /admin for a super admin who has passed two-step verification.
 const COOKIE = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' };
-const PROTECTED = ['/pos', '/products', '/stock', '/sales', '/reports', '/staff', '/branches', '/settings', '/security', '/admin', '/home'];
+const PROTECTED = ['/pos', '/products', '/stock', '/sales', '/reports', '/staff', '/branches', '/settings', '/security', '/admin', '/agent', '/home'];
 
 const b64 = (s) => { try { return JSON.parse(atob(s.replace(/-/g, '+').replace(/_/g, '/'))); } catch { return null; } };
 
