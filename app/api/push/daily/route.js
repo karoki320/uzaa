@@ -5,8 +5,9 @@ import { money } from '@/lib/util';
 
 export const dynamic = 'force-dynamic';
 
-// Called once an hour by the scheduler. Every business whose chosen hour it is in Nairobi gets one
-// summary of the day. Nothing else can call it: the scheduler sends a secret.
+// Called once a day at 20:00 Nairobi (17:00 UTC, see vercel.json). Vercel's Hobby plan only allows daily
+// cron jobs: an hourly schedule makes Vercel refuse every deployment. Every business that chose the daily
+// summary gets one. Nothing else can call it: the scheduler sends a secret.
 export async function GET(req) {
   if (!serverReady() || !pushReady()) return NextResponse.json({ ok: false, reason: 'not set up' }, { status: 503 });
   const secret = process.env.CRON_SECRET || '';
@@ -20,7 +21,7 @@ export async function GET(req) {
   const to = new Date(from.getTime() + 864e5);
 
   const sb = adminClient();
-  const { data: list } = await sb.from('businesses').select('id,name,currency').eq('notify_mode', 'daily').eq('notify_hour', hour).eq('status', 'active');
+  const { data: list } = await sb.from('businesses').select('id,name,currency').eq('notify_mode', 'daily').eq('status', 'active');
   let done = 0;
   for (const biz of list || []) {
     const { data: rows } = await sb.rpc('day_summary', { p_business: biz.id, p_from: from.toISOString(), p_to: to.toISOString() });

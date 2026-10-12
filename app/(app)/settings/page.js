@@ -198,13 +198,7 @@ export default function Settings() {
           </label>
         )}
         {f.notify_mode === 'daily' && (
-          <label className="field" style={{ maxWidth: 200 }}><span>Send it at</span>
-            <select className="input" value={f.notify_hour} onChange={set('notify_hour')}>
-              {Array.from({ length: 24 }, (_, h) => (
-                <option key={h} value={h}>{`${String(h).padStart(2, '0')}:00`}</option>
-              ))}
-            </select>
-          </label>
+          <p className="muted small">The summary arrives every evening at 8:00 pm.</p>
         )}
         {f.notify_mode !== 'off' && (
           <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 12 }}>
