@@ -20,7 +20,16 @@ module.exports = {
   poweredByHeader: false,
   images: { unoptimized: true },
   async rewrites() {
-    return { beforeFiles: [{ source: '/', destination: '/landing.html' }] };
+    return {
+      beforeFiles: [
+        // Supabase's default email links land on the site root. Send those to the handler that can
+        // finish them, instead of showing the sales page.
+        { source: '/', has: [{ type: 'query', key: 'code' }], destination: '/auth/callback' },
+        { source: '/', has: [{ type: 'query', key: 'error' }], destination: '/auth/callback' },
+        { source: '/', has: [{ type: 'query', key: 'token_hash' }], destination: '/auth/confirm' },
+        { source: '/', destination: '/landing.html' },
+      ],
+    };
   },
   async headers() {
     return [

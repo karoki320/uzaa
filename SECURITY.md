@@ -82,3 +82,8 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 - Every user accepts once. The date and version live on their profile; `accept_terms()` writes only for the caller.
 - A new owner ticks the box on the signup form; the server refuses a signup without it, and `register_business` records the acceptance.
 - Everyone else is asked at their next sign-in, and nothing else in the app opens until they accept.
+
+## Email links
+
+- Uzaa's templates send people to `/auth/confirm?token_hash=...&type=...`, verified on the server; the session becomes an httpOnly cookie and the reply is a meta-refresh hop so the Strict cookie is sent on the next request.
+- Supabase's default templates instead land on the site root with `?code=...`. The root rewrite now sends `?code=`, `?error=` and `?token_hash=` to the handler that can finish them, so such a link no longer shows the sales page. A code link can only complete in the browser that requested it (the PKCE verifier is a cookie), and never for an invite; that case gets a message saying what to do instead.

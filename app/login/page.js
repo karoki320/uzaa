@@ -9,6 +9,7 @@ import { post, go } from '@/lib/api';
 const NOTES = {
   link: 'That link is invalid or has expired. Request a new one below.',
   reset_expired: 'That reset link has expired or was already used. Use "Forgot password" to get a new one.',
+  link_device: 'That link could not be opened here. If you were invited, use "Forgot password" to set your password. If you asked for a sign-in link, open it in the same browser you asked from.',
   setup: 'The server is not set up yet. Please contact Uzaa support.',
 };
 
