@@ -113,3 +113,9 @@ Vercel > Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABAS
 
 - The terms gate only appears when the database can actually record the acceptance. If the patch adding `profiles.terms_accepted_at` has not been run, the field is absent and nobody is held at the door; if `accept_terms()` is missing, accepting lets the person through anyway. A screen about paperwork must never stand between an owner and their shop.
 - `/api/auth/me` now separates "this person has no business" from "the business could not be read". A failed read shows a plain message with a Try again button instead of sending a perfectly good account off to create a second one.
+
+## Removing a business
+
+- Only the super admin, with two-step verification, and only after typing the business name exactly. The server checks the name against the database, not against anything the browser sends.
+- The business row goes first: every table under it cascades, so no products, stock, sales, customers or staff rows are left pointing at a business that is gone. The logins belonging to it are then deleted, so nobody is left with a sign-in that leads nowhere.
+- Deleting by hand in the Supabase tables only ever removes one side. `supabase/cleanup-orphans.sql` lists both kinds of leftovers and has the statements to clear them.

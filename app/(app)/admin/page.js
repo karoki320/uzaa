@@ -8,6 +8,7 @@ import Modal from '@/components/Modal';
 export default function Admin() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
+  const [del, setDel] = useState(null);      // { id, name, counts, typed }
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_overview');
@@ -25,8 +26,25 @@ export default function Admin() {
     load();
   }
 
-  if (err) return <div className="err">{err}</div>;
-  if (!rows) return <div className="muted">Loading...</div>;
+  async function askDelete(b) {
+    setErr('');
+    const r = await post('/api/admin/business', { id: b.id });
+    if (!r.ok) { setErr(r.data.error || 'Could not read that business'); return load(); }
+    setDel({ id: b.id, name: b.name, counts: r.data, typed: '' });
+  }
+
+  async function reallyDelete() {
+    const r = await fetch('/api/admin/business', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: del.id, confirm: del.typed }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return setDel({ ...del, err: j.error || 'Could not remove that business' });
+    setDel(null);
+    load();
+  }
+
+  if (!rows) return err ? <div className="err">{err}</div> : <div className="muted">Loading...</div>;
 
   const week = rows.reduce((s, r) => s + Number(r.revenue_7d), 0);
   const active = rows.filter((r) => r.last_sale && Date.now() - new Date(r.last_sale) < 7 * 864e5).length;
@@ -34,12 +52,29 @@ export default function Admin() {
   return (
     <>
       <h1>Uzaa admin</h1>
+      {err && <div className="err" role="alert">{err}</div>}
       <div className="kpis">
         <div className="kpi"><div className="v">{rows.length}</div><div className="l">Businesses</div></div>
         <div className="kpi"><div className="v">{active}</div><div className="l">Sold something in the last 7 days</div></div>
         <div className="kpi"><div className="v">{money(week)}</div><div className="l">Revenue across all, last 7 days</div></div>
         <div className="kpi"><div className="v">{num(rows.reduce((s, r) => s + Number(r.sales_count), 0))}</div><div className="l">Total sales recorded</div></div>
       </div>
+      {del && (
+        <Modal title={`Remove ${del.name}`} onClose={() => setDel(null)}>
+          <p className="muted" style={{ marginTop: 0 }}>This removes the business and everything in it. It cannot be undone.</p>
+          <div className="tint" style={{ marginBottom: 12 }}>
+            <div className="small">{del.counts.branches} branch(es), {del.counts.staff} staff login(s), {del.counts.products} product(s), {del.counts.sales} sale(s), {del.counts.customers} credit customer(s)</div>
+          </div>
+          <label className="field"><span>Type <b>{del.name}</b> to confirm</span>
+            <input className="input" autoFocus value={del.typed} onChange={(e) => setDel({ ...del, typed: e.target.value, err: '' })} />
+          </label>
+          {del.err && <div className="err" role="alert">{del.err}</div>}
+          <button className="btn danger" style={{ width: '100%' }} disabled={del.typed.trim() !== del.name} onClick={reallyDelete}>
+            Remove this business for good
+          </button>
+        </Modal>
+      )}
+
       <SalesTeam />
 
       <h2 style={{ marginBottom: 8 }}>Businesses</h2>
@@ -50,7 +85,11 @@ export default function Admin() {
             {rows.map((b) => (
               <tr key={b.id}>
                 <td><b>{b.name}</b><div className="small muted">Joined {fmtDate(b.created_at)}</div></td>
-                <td>{b.owner_email}<div className="small muted">{b.agent_name ? `signed by ${b.agent_name}` : 'signed up themselves'}</div></td>
+                <td>
+                  {b.owner_email}
+                  <div className="small muted">{b.agent_name ? `signed by ${b.agent_name}` : 'signed up themselves'}</div>
+                  {Number(b.staff) === 0 && <div className="small warn">No login left for this business</div>}
+                </td>
                 <td>{b.business_type}</td>
                 <td className="num">{b.branches}</td>
                 <td className="num">{b.staff}</td>
@@ -62,7 +101,12 @@ export default function Admin() {
                   {b.status === 'pending' && <span className="badge amber">Waiting for activation</span>}
                   {b.status === 'suspended' && <span className="badge red">Suspended</span>}
                 </td>
-                <td className="right"><button className={`btn small ${b.status === 'active' ? 'danger' : 'primary'}`} onClick={() => toggle(b)}>{b.status === 'active' ? 'Suspend' : b.status === 'pending' ? 'Activate' : 'Reactivate'}</button></td>
+                <td className="right">
+                  <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                    <button className={`btn small ${b.status === 'active' ? 'danger' : 'primary'}`} onClick={() => toggle(b)}>{b.status === 'active' ? 'Suspend' : b.status === 'pending' ? 'Activate' : 'Reactivate'}</button>
+                    <button className="btn small danger" onClick={() => askDelete(b)}>Remove</button>
+                  </div>
+                </td>
               </tr>
             ))}
             {rows.length === 0 && <tr><td colSpan="10" className="muted">No businesses yet.</td></tr>}
