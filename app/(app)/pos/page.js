@@ -8,6 +8,8 @@ import { paperWidth, schemeUrl } from '@/lib/printclient';
 import { saveKv, getKv, strip, queueSale, nextLocalNo } from '@/lib/offline';
 import { syncQueue, isNetwork } from '@/lib/sync';
 import Modal from '@/components/Modal';
+import CameraScanner from '@/components/CameraScanner';
+import { findByBarcode } from '@/lib/barcode';
 
 export default function POS() {
   const { profile, business, branches, session } = useAuth();
@@ -35,6 +37,10 @@ export default function POS() {
   const [customers, setCustomers] = useState([]);
   const [customer, setCustomer] = useState(null);
   const [pick, setPick] = useState(false);
+  const [scan, setScan] = useState(false);
+  const [scanOut, setScanOut] = useState(false);   // false: scanning adds to the sale, true: takes off
+  const cartNow = useRef(cart);
+  cartNow.current = cart;
   const input = useRef(null);
   const mode = business.receipt_mode || 'always';
   const barcodeOn = business.barcode_enabled !== false;
@@ -117,10 +123,29 @@ export default function POS() {
     e.preventDefault();
     const t = q.trim();
     if (!t) return;
-    const exact = products.find((p) => p.barcode && p.barcode === t);
+    const exact = findByBarcode(products, t);
     if (exact) { add(exact); setQ(''); return; }
     if (filtered.length === 1) { add(filtered[0]); setQ(''); return; }
     setErr(`No exact match for "${t}"`);
+  }
+
+  // a code read by the phone camera: same as a handheld scanner
+  function onScan(code) {
+    const p = findByBarcode(products, code);
+    if (!p) return { ok: false, text: `No ${label.toLowerCase()} has barcode ${code}.${isCashier ? ' Ask your manager to add it.' : ' Add it under Products first.'}` };
+    const inCart = cartNow.current.find((x) => x.id === p.id);
+    const step = stepFor(p.unit || 'pc');
+    if (scanOut) {
+      if (!inCart) return { ok: false, text: `${p.name} is not in this sale` };
+      setQty(p.id, -1);
+      const left = Math.max(0, Math.round((inCart.qty - step) * 1000) / 1000);
+      return { ok: true, text: left > 0 ? `Took off ${p.name} (${num(left)} left in sale)` : `Removed ${p.name} from the sale` };
+    }
+    add(p);
+    const qty = Math.round(((inCart?.qty || 0) + step) * 1000) / 1000;
+    const have = stock[p.id] ?? 0;
+    const low = p.track_stock && have < qty ? `. Only ${num(have)} in stock` : '';
+    return { ok: !low, text: `${p.name} ${money(p.price, cur)}${qty > 1 ? ` (x${num(qty)})` : ''}${low}` };
   }
 
   const setQty = (id, dir) =>
@@ -248,7 +273,12 @@ export default function POS() {
             <button className={!cat ? 'on' : ''} onClick={() => setCat('')}>All</button>
             {cats.map((c) => <button key={c} className={cat === c ? 'on' : ''} onClick={() => setCat(cat === c ? '' : c)}>{c}</button>)}
           </div>
-          <button type="button" className="iconbtn" onClick={() => { setShowSearch((v) => !v); setTimeout(() => input.current?.focus(), 30); }} aria-label="Search" aria-expanded={showSearch}>
+          {barcodeOn && (
+            <button type="button" className="iconbtn" onClick={() => { setScanOut(false); setScan(true); }} aria-label="Scan with camera" title="Scan with camera">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3" /><path d="M8 8v8M11 8v8M14 8v8M17 8v8" /></svg>
+            </button>
+          )}
+          <button type="button" className="iconbtn" style={barcodeOn ? { marginLeft: 0 } : undefined} onClick={() => { setShowSearch((v) => !v); setTimeout(() => input.current?.focus(), 30); }} aria-label="Search" aria-expanded={showSearch}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
           </button>
         </div>
@@ -373,6 +403,19 @@ export default function POS() {
           </>
         )}
       </aside>
+
+      {scan && (
+        <CameraScanner title="Scan to sell" onCode={onScan} onClose={() => setScan(false)}>
+          <div className="scanmode" role="group" aria-label="What a scan does">
+            <button type="button" className={`btn small ${!scanOut ? 'on' : ''}`} onClick={() => setScanOut(false)}>Add to sale</button>
+            <button type="button" className={`btn small ${scanOut ? 'on out' : ''}`} onClick={() => setScanOut(true)}>Take off sale</button>
+          </div>
+          <div className="scansum">
+            <span>{cart.reduce((n, c) => n + (stepFor(c.unit) === 1 ? c.qty : 1), 0)} item(s) in sale</span>
+            <b>{money(total, cur)}</b>
+          </div>
+        </CameraScanner>
+      )}
 
       {pick && (
         <CustomerPick

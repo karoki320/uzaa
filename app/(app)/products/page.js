@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { money, UNITS } from '@/lib/util';
 import Modal from '@/components/Modal';
+import CameraScanner from '@/components/CameraScanner';
+import { findByBarcode } from '@/lib/barcode';
 
 const blank = { name: '', barcode: '', category: '', unit: 'pc', price: '', cost: '', track_stock: true, low_stock_level: 5, custom: {}, opening: '' };
 
@@ -20,6 +22,7 @@ export default function Products() {
   const [branchId, setBranchId] = useState(profile.branch_id || branches[0]?.id);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [scan, setScan] = useState(null);   // 'find': look a product up, 'field': fill the barcode box
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('products').select('*').order('name').range(0, 4999);
@@ -31,6 +34,31 @@ export default function Products() {
     setCats(data || []);
   }, []);
   useEffect(() => { loadCats(); }, [loadCats]);
+
+  // arriving from a scan of an unknown code (Stock page): open "Add" with the barcode filled in
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('barcode');
+    if (!code) return;
+    setEdit({ ...blank, barcode: code.slice(0, 64) });
+    window.history.replaceState(null, '', window.location.pathname);
+  }, []);
+
+  // scan a product: open it if it exists, otherwise start adding it with the barcode filled in
+  function onFind(code) {
+    const p = findByBarcode(rows, code);
+    setScan(null);
+    setErr('');
+    if (p) setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' });
+    else setEdit({ ...blank, barcode: code });
+    return { ok: true, text: p ? p.name : `New: ${code}` };
+  }
+  function onField(code) {
+    const other = findByBarcode(rows, code);
+    if (other && other.id !== edit?.id) return { ok: false, text: `${code} is already used by ${other.name}` };
+    setEdit((x) => ({ ...x, barcode: code }));
+    setScan(null);
+    return { ok: true, text: code };
+  }
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -93,7 +121,10 @@ export default function Products() {
     <>
       <div className="row between" style={{ marginBottom: 12 }}>
         <div><h1>{label}s</h1><div className="muted small">{rows.length} in catalogue</div></div>
-        <button className="btn primary" onClick={() => setEdit({ ...blank })}>Add {label.toLowerCase()}</button>
+        <div className="row" style={{ gap: 8 }}>
+          {barcodeOn && <button className="btn" onClick={() => setScan('find')}>Scan</button>}
+          <button className="btn primary" onClick={() => setEdit({ ...blank })}>Add {label.toLowerCase()}</button>
+        </div>
       </div>
       <input className="input" placeholder={barcodeOn ? 'Search by name, barcode or category' : 'Search by name or category'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 12 }} />
       <div className="card table-wrap">
@@ -125,7 +156,14 @@ export default function Products() {
         <Modal title={edit.id ? `Edit ${label.toLowerCase()}` : `Add ${label.toLowerCase()}`} onClose={() => setEdit(null)}>
           <form onSubmit={save}>
             <label className="field"><span>Name</span><input className="input" required value={edit.name} onChange={set('name')} /></label>
-            {barcodeOn && <label className="field"><span>Barcode (scan it here)</span><input className="input" value={edit.barcode || ''} onChange={set('barcode')} /></label>}
+            {barcodeOn && (
+              <label className="field"><span>Barcode (scan it here, or use the camera)</span>
+                <div className="barcode-field">
+                  <input className="input" value={edit.barcode || ''} onChange={set('barcode')} />
+                  <button type="button" className="btn small" onClick={() => setScan('field')}>Camera</button>
+                </div>
+              </label>
+            )}
             <div className="row">
               <label className="field grow"><span>Category</span>
                 <select className="input" value={edit.category || ''} onChange={set('category')}>
@@ -180,6 +218,14 @@ export default function Products() {
             <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Saving...' : 'Save'}</button>
           </form>
         </Modal>
+      )}
+      {scan && (
+        <CameraScanner
+          single
+          title={scan === 'find' ? `Scan a ${label.toLowerCase()}` : 'Scan its barcode'}
+          onCode={scan === 'find' ? onFind : onField}
+          onClose={() => setScan(null)}
+        />
       )}
     </>
   );

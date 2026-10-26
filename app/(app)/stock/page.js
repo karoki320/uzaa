@@ -1,9 +1,15 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { money, num, fmtDate } from '@/lib/util';
 import Modal from '@/components/Modal';
+import CameraScanner from '@/components/CameraScanner';
+import { barcodeKeys, findByBarcode } from '@/lib/barcode';
+
+const IN_REASONS = ['Received stock', 'Stock count correction', 'Returned by customer', 'Other'];
+const OUT_REASONS = ['Damaged or expired', 'Returned to supplier', 'Stock count correction', 'Used in the shop', 'Other'];
 
 export default function Stock() {
   const { business, branches, profile } = useAuth();
@@ -16,6 +22,16 @@ export default function Stock() {
   const [moves, setMoves] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  const label = business.item_label || 'Product';
+  // camera scanning: each scan adds (in) or removes (out) stock straight away
+  const [scan, setScan] = useState(false);
+  const [dir, setDir] = useState('in');
+  const [per, setPer] = useState('1');
+  const [reason, setReason] = useState(IN_REASONS[0]);
+  const [log, setLog] = useState([]);
+  const stockNow = useRef(stock);
+  stockNow.current = stock;
 
   const load = useCallback(async () => {
     if (!branchId) return;
@@ -56,6 +72,50 @@ export default function Stock() {
     load();
   }
 
+  function openScan(d) {
+    setDir(d);
+    setReason(d === 'in' ? IN_REASONS[0] : OUT_REASONS[0]);
+    setPer('1');
+    setLog([]);
+    setScan(true);
+  }
+  function switchDir(d) {
+    setDir(d);
+    setReason(d === 'in' ? IN_REASONS[0] : OUT_REASONS[0]);
+  }
+
+  async function onScan(code) {
+    const qty = Number(per);
+    if (!(qty > 0)) return { ok: false, text: 'Set how many each scan counts for (1 or more)' };
+    let p = findByBarcode(products, code);
+    if (!p) {
+      // not a tracked item here: say why
+      const { data } = await supabase.from('products').select('id,name,active,track_stock').in('barcode', barcodeKeys(code)).limit(1);
+      const o = data?.[0];
+      if (!o) return { ok: false, text: `No ${label.toLowerCase()} has barcode ${code}`, action: { label: `Add as new ${label.toLowerCase()}`, run: () => router.push(`/products?barcode=${encodeURIComponent(code)}`) } };
+      if (!o.active) return { ok: false, text: `${o.name} is hidden. Show it again under Products first.` };
+      return { ok: false, text: `${o.name} does not track stock. Turn on "Track stock" for it under Products.` };
+    }
+    const change = dir === 'in' ? qty : -qty;
+    const have = stockNow.current[p.id] ?? 0;
+    if (change < 0 && have + change < 0) return { ok: false, text: `${p.name}: only ${num(have)} in stock, cannot remove ${num(qty)}` };
+    const { error } = await supabase.rpc('adjust_stock', { p_product: p.id, p_branch: branchId, p_change: change, p_reason: `${reason} (scanned)` });
+    if (error) return { ok: false, text: /fetch|network/i.test(error.message) ? 'No connection. Stock was not changed; scan again when you are online.' : error.message };
+    const now = Math.round((have + change) * 1000) / 1000;
+    setStock((m) => ({ ...m, [p.id]: now }));
+    setLog((l) => [{ key: crypto.randomUUID(), id: p.id, name: p.name, change, reason, now }, ...l]);
+    return { ok: true, text: `${p.name} ${change > 0 ? '+' : ''}${num(change)}, now ${num(now)} in stock` };
+  }
+
+  async function undo(row) {
+    const { error } = await supabase.rpc('adjust_stock', { p_product: row.id, p_branch: branchId, p_change: -row.change, p_reason: 'Scan undone' });
+    if (error) return setErr(error.message);
+    setStock((m) => ({ ...m, [row.id]: Math.round(((m[row.id] ?? 0) - row.change) * 1000) / 1000 }));
+    setLog((l) => l.map((x) => (x.key === row.key ? { ...x, undone: true } : x)));
+  }
+
+  const scanned = log.filter((x) => !x.undone);
+
   return (
     <>
       <div className="row between" style={{ marginBottom: 12 }}>
@@ -66,6 +126,12 @@ export default function Stock() {
           </select>
         )}
       </div>
+      {business.barcode_enabled !== false && (
+        <div className="row" style={{ marginBottom: 12, gap: 8 }}>
+          <button className="btn primary grow" onClick={() => openScan('in')}>Scan to add stock</button>
+          <button className="btn grow" onClick={() => openScan('out')}>Scan to remove stock</button>
+        </div>
+      )}
       <div className="kpis">
         <div className="kpi"><div className="v">{products.length}</div><div className="l">Tracked items</div></div>
         <div className="kpi"><div className="v">{lowCount}</div><div className="l">Low or out of stock</div></div>
@@ -106,6 +172,43 @@ export default function Stock() {
           </table>
         </div>
       </div>
+
+      {scan && (
+        <CameraScanner title={dir === 'in' ? 'Scan to add stock' : 'Scan to remove stock'} onCode={onScan} onClose={() => { setScan(false); load(); }}>
+          <div className="scanmode" role="group" aria-label="Add or remove">
+            <button type="button" className={`btn small ${dir === 'in' ? 'on' : ''}`} onClick={() => switchDir('in')}>Add stock</button>
+            <button type="button" className={`btn small ${dir === 'out' ? 'on out' : ''}`} onClick={() => switchDir('out')}>Remove stock</button>
+          </div>
+          <div className="row" style={{ gap: 8, marginTop: 10 }}>
+            <label className="field" style={{ margin: 0, width: 110 }}><span>Each scan</span>
+              <input className="input" inputMode="decimal" value={per} onChange={(e) => setPer(e.target.value)} aria-label="Quantity per scan" />
+            </label>
+            <label className="field grow" style={{ margin: 0 }}><span>Reason</span>
+              <select className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
+                {(dir === 'in' ? IN_REASONS : OUT_REASONS).map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </label>
+          </div>
+          <p className="small muted" style={{ margin: '6px 0 0' }}>Tip: for a carton of 24, set Each scan to 24 and scan one item.</p>
+          {log.length > 0 && (
+            <>
+              <div className="scansum">
+                <span>{scanned.length} scan(s) saved</span>
+                <span className="small muted">{num(scanned.filter((x) => x.change > 0).reduce((t, x) => t + x.change, 0))} in, {num(-scanned.filter((x) => x.change < 0).reduce((t, x) => t + x.change, 0))} out</span>
+              </div>
+              <div className="scanlog">
+                {log.map((x) => (
+                  <div key={x.key} className={x.undone ? 'undone' : ''}>
+                    <span><b>{x.name}</b> {x.change > 0 ? '+' : ''}{num(x.change)} <span className="muted small">now {num(x.now)}</span></span>
+                    {!x.undone && <button className="btn small" onClick={() => undo(x)}>Undo</button>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {err && <div className="err">{err}</div>}
+        </CameraScanner>
+      )}
 
       {adj && (
         <Modal title={adj.p.name} onClose={() => setAdj(null)}>
