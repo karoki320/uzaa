@@ -6,6 +6,7 @@ import { money, UNITS } from '@/lib/util';
 import Modal from '@/components/Modal';
 import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
+import { post } from '@/lib/api';
 
 const blank = { name: '', barcode: '', category: '', unit: 'pc', price: '', cost: '', track_stock: true, low_stock_level: 5, custom: {}, opening: '' };
 
@@ -22,6 +23,7 @@ export default function Products() {
   const [branchId, setBranchId] = useState(profile.branch_id || branches[0]?.id);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [look, setLook] = useState(null);   // name lookup for a new barcode: { code, state, text }
   const [scan, setScan] = useState(null);   // 'find': look a product up, 'field': fill the barcode box
 
   const load = useCallback(async () => {
@@ -40,8 +42,24 @@ export default function Products() {
     const code = new URLSearchParams(window.location.search).get('barcode');
     if (!code) return;
     setEdit({ ...blank, barcode: code.slice(0, 64) });
+    lookup(code.slice(0, 64));
     window.history.replaceState(null, '', window.location.pathname);
   }, []);
+
+  // a barcode only holds a number: ask the free Open Food Facts database for the product's name and size
+  async function lookup(code) {
+    const c = String(code || '').trim();
+    if (!/^\d{8,14}$/.test(c)) return;
+    setLook({ code: c, state: 'busy', text: 'Looking up the name...' });
+    const r = await post('/api/barcode', { code: c });
+    if (r.ok && r.data.found) {
+      // fill the name only if it is still empty and the barcode has not changed meanwhile
+      setEdit((x) => (x && !x.id && x.barcode?.trim() === c && !x.name.trim() ? { ...x, name: r.data.name } : x));
+      setLook({ code: c, state: 'found', text: `Found: ${r.data.name}. Check the name, then add your selling price.` });
+    } else {
+      setLook({ code: c, state: 'none', text: r.data?.error || (r.ok ? 'Not in the free product database (common for local products). Type the name.' : 'Could not look the name up. Type it yourself.') });
+    }
+  }
 
   // scan a product: open it if it exists, otherwise start adding it with the barcode filled in
   function onFind(code) {
@@ -49,13 +67,14 @@ export default function Products() {
     setScan(null);
     setErr('');
     if (p) setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' });
-    else setEdit({ ...blank, barcode: code });
+    else { setEdit({ ...blank, barcode: code }); lookup(code); }
     return { ok: true, text: p ? p.name : `New: ${code}` };
   }
   function onField(code) {
     const other = findByBarcode(rows, code);
     if (other && other.id !== edit?.id) return { ok: false, text: `${code} is already used by ${other.name}` };
     setEdit((x) => ({ ...x, barcode: code }));
+    if (!edit?.id && !edit?.name?.trim()) lookup(code);
     setScan(null);
     return { ok: true, text: code };
   }
@@ -159,9 +178,17 @@ export default function Products() {
             {barcodeOn && (
               <label className="field"><span>Barcode (scan it here, or use the camera)</span>
                 <div className="barcode-field">
-                  <input className="input" value={edit.barcode || ''} onChange={set('barcode')} />
+                  <input
+                    className="input" value={edit.barcode || ''} onChange={set('barcode')}
+                    // a USB scanner ends with Enter: look the name up instead of saving a half-filled form
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!edit.id && !edit.name.trim()) lookup(edit.barcode); } }}
+                    onBlur={() => { if (!edit.id && !edit.name.trim() && look?.code !== edit.barcode?.trim()) lookup(edit.barcode); }}
+                  />
                   <button type="button" className="btn small" onClick={() => setScan('field')}>Camera</button>
                 </div>
+                {look && look.code === edit.barcode?.trim() && !edit.id && (
+                  <span className={`small ${look.state === 'found' ? 'ok' : 'muted'}`} style={{ display: 'block', marginTop: 6 }} role="status">{look.text}</span>
+                )}
               </label>
             )}
             <div className="row">
