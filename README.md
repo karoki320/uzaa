@@ -26,4 +26,12 @@ Send them to `/signup`. They pick a business type, and they are selling within m
 - No scanner? Use the phone or laptop camera. Sell: the barcode button next to search adds each scanned item to the sale (switch to "Take off sale" to remove). Stock: "Scan to add stock" / "Scan to remove stock" changes stock with every scan, with Undo. Products: "Scan" opens the item (or starts adding it), and "Camera" fills the barcode box. Chrome on Android reads every common code type with the phone's own reader; other browsers (iPhone, Windows) use the built-in reader in `lib/barcode.js`, which reads EAN-13, EAN-8 and UPC-A. The camera needs the https address (or localhost).
 - Receipts print through the browser print dialog, laid out for 80 mm thermal paper. Tick "Print receipt automatically" on the receipt window to skip the click. For 58 mm paper, change `80mm` in `app/globals.css`.
 - To print without the dialog, start Chrome with `--kiosk-printing` on the till computer.
-"# uzaa" 
+
+## E-receipts on WhatsApp
+
+1. Run `supabase/security-patch-11.sql` (or `apply-all.sql`) in the SQL Editor.
+2. In Vercel set `RECEIPT_SECRET` (a long random string, set once and never change it) and `PUBLIC_SITE_URL=https://uzaa.co.ke`.
+3. Owners turn it on when they sign up, or under Settings > E-receipts on WhatsApp: the shop's WhatsApp number, logo, brand colour, thank-you message, one extra link (for example a Google review link) and whether "Powered by Uzaa" shows.
+4. After a sale the cashier taps **E-receipt** (or opens the sale under Sales), types the customer's number, and WhatsApp opens on the till phone with the message ready. The message comes from whichever WhatsApp account is on that phone, so log it into the shop's number.
+5. The link opens `/r/<token>`: a public, branded receipt page that never expires and can be printed or saved as PDF.
+

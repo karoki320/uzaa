@@ -10,6 +10,7 @@ import { syncQueue, isNetwork } from '@/lib/sync';
 import Modal from '@/components/Modal';
 import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
+import EReceiptSend from '@/components/EReceiptSend';
 
 export default function POS() {
   const { profile, business, branches, session } = useAuth();
@@ -45,6 +46,8 @@ export default function POS() {
   const mode = business.receipt_mode || 'always';
   const barcodeOn = business.barcode_enabled !== false;
   const label = business.item_label || 'Product';
+  const eOn = !!business.ereceipt_enabled;
+  const [eSend, setESend] = useState(null);   // the sale whose e-receipt is being sent on WhatsApp
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -239,7 +242,7 @@ export default function POS() {
     loadStock();
     syncQueue(session?.user?.id);   // also send anything that was waiting
     post('/api/push/sale', { sale_id: id });   // the owner's phone, if they asked for it
-    const info = { id, no: row?.receipt_no, total: row?.total, change: Math.max(0, Number(row?.amount_paid || 0) - Number(row?.total || 0)), url: '', failed: false };
+    const info = { id, no: row?.receipt_no, total: row?.total, at: new Date().toISOString(), phone: customer?.phone || '', cname: customer?.name || '', change: Math.max(0, Number(row?.amount_paid || 0) - Number(row?.total || 0)), url: '', failed: false };
     setFlash(info);
     if (withPrint) {
       const r = await post('/api/print/link', { sale_id: id, width: paperWidth() });
@@ -320,7 +323,7 @@ export default function POS() {
             flash.queued ? (
               <div className="flashrow" role="status">
                 <div><b>Sale {flash.no} saved on this phone.</b> {money(flash.total, cur)}{flash.change > 0 ? `, change ${money(flash.change, cur)}` : ''}
-                  <div className="small muted">It uploads by itself when you are online. Print it from Sales after that.</div></div>
+                  <div className="small muted">It uploads by itself when you are online. Print it{eOn ? ' or send the e-receipt' : ''} from Sales after that.</div></div>
                 <button className="btn small" onClick={() => setFlash(null)} aria-label="Dismiss">Close</button>
               </div>
             ) : (
@@ -330,6 +333,7 @@ export default function POS() {
               {mode !== 'never' && (flash.url
                 ? <a className="btn small primary" href={schemeUrl(flash.url)} style={{ textDecoration: 'none' }}>Print again</a>
                 : <button className="btn small" disabled={flash.failed} onClick={async () => { const r = await post('/api/print/link', { sale_id: flash.id, width: paperWidth() }); if (r.ok) { setFlash({ ...flash, url: r.data.url, failed: false }); window.location.href = schemeUrl(r.data.url); } else setFlash({ ...flash, failed: true }); }}>Print</button>)}
+              {eOn && <button className="btn small primary" onClick={() => setESend(flash)}>E-receipt</button>}
               <button className="btn small" onClick={() => setFlash(null)} aria-label="Dismiss">Close</button>
             </div>)
           ) : <p className="muted cart-empty">Tap an item to start a sale.</p>
@@ -415,6 +419,15 @@ export default function POS() {
             <b>{money(total, cur)}</b>
           </div>
         </CameraScanner>
+      )}
+
+      {eSend && (
+        <EReceiptSend
+          business={business}
+          sale={{ id: eSend.id, receipt_no: eSend.no, total: eSend.total, created_at: eSend.at }}
+          phone={eSend.phone} name={eSend.cname}
+          onClose={() => setESend(null)}
+        />
       )}
 
       {pick && (

@@ -10,7 +10,7 @@ import { TYPE_PRESETS } from '@/lib/util';
 
 export default function Signup() {
   const { session, profile, me, loading } = useAuth();
-  const [f, setF] = useState({ full_name: '', email: '', password: '', business: '', type: 'retail' });
+  const [f, setF] = useState({ full_name: '', email: '', password: '', business: '', type: 'retail', ereceipt: false, ereceipt_whatsapp: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -32,7 +32,7 @@ export default function Signup() {
     e.preventDefault();
     setErr(''); setBusy(true);
     if (!terms) { setBusy(false); return setErr('Tick the box to accept the terms before you continue'); }
-    const body = { business: f.business, type: f.type, full_name: f.full_name, captcha: token, terms: true };
+    const body = { business: f.business, type: f.type, full_name: f.full_name, captcha: token, terms: true, ereceipt: !!f.ereceipt, ereceipt_whatsapp: f.ereceipt ? f.ereceipt_whatsapp : '' };
     if (!session) { body.email = f.email; body.password = f.password; }
     const r = await post('/api/auth/signup', body);
     if (r.ok && r.data.confirm) { setNotice(r.data.message); setBusy(false); return; }
@@ -91,6 +91,16 @@ export default function Signup() {
             </label>
             <PasswordField value={f.password} onChange={(v) => setF({ ...f, password: v })} email={f.email} />
           </>
+        )}
+        <label className="terms-tick">
+          <input type="checkbox" checked={f.ereceipt} onChange={(e) => setF({ ...f, ereceipt: e.target.checked })} />
+          <span>Send my customers e-receipts on WhatsApp (free). You can add your logo and colours later in Settings.</span>
+        </label>
+        {f.ereceipt && (
+          <label className="field">
+            <span>Your shop's WhatsApp number</span>
+            <input className="input" inputMode="tel" required maxLength={20} placeholder="0722 000 111" value={f.ereceipt_whatsapp} onChange={set('ereceipt_whatsapp')} />
+          </label>
         )}
         {needCaptcha && captchaOn && <Captcha onToken={setToken} resetKey={ck} />}
         <label className="terms-tick">

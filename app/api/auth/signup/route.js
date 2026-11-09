@@ -2,7 +2,7 @@ import { bad, ok, userClient, serverReady, sameOrigin, readJson, normEmail, emai
 import { hitIp, LIMITS, verifyCaptcha, captchaConfigured } from '@/lib/ratelimit';
 import { checkPassword } from '@/lib/pwned';
 import { registerFromMeta } from '@/lib/register';
-import { TYPE_PRESETS } from '@/lib/util';
+import { TYPE_PRESETS, waLink } from '@/lib/util';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
@@ -15,6 +15,10 @@ export async function POST(req) {
   if (!business || business.length > 120) return bad('Enter your business name');
   if (!full_name || full_name.length > 120) return bad('Enter your name');
   if (b.terms !== true) return bad('Tick the box to accept the terms before you continue');
+  const ereceipt = b.ereceipt === true;
+  const ereceipt_whatsapp = String(b.ereceipt_whatsapp || '').trim().slice(0, 20);
+  if (ereceipt && !waLink(ereceipt_whatsapp)) return bad('Enter the WhatsApp number your e-receipts come from, like 0722 000 111');
+  const extra = ereceipt ? { ereceipt, ereceipt_whatsapp } : {};
 
   const sb = await userClient();
 
@@ -24,7 +28,7 @@ export async function POST(req) {
   if (cur?.user && !b.email) {
     const { data: mine } = await sb.from('profiles').select('id').eq('id', cur.user.id).maybeSingle();
     if (mine) return ok({ next: '/home' });
-    const done = await registerFromMeta(sb, { ...cur.user, user_metadata: { business, full_name, type } });
+    const done = await registerFromMeta(sb, { ...cur.user, user_metadata: { business, full_name, type, ...extra } });
     return done ? ok({ next: '/pos' }) : bad('Could not set up your business. Sign out, sign in again and retry.');
   }
 
@@ -36,7 +40,7 @@ export async function POST(req) {
   if (pwErr) return bad(pwErr);
   if (captchaConfigured() && !(await verifyCaptcha(b.captcha, clientIp(req)))) return bad('Please complete the check below to continue.', 400, { captcha: true });
 
-  const { data, error } = await sb.auth.signUp({ email, password: b.password, options: { data: { business, full_name, type } } });
+  const { data, error } = await sb.auth.signUp({ email, password: b.password, options: { data: { business, full_name, type, ...extra } } });
   await logEvent(adminClient(), 'signup', { email, ip: clientIp(req), success: !error });
   if (error) {
     if (/already (registered|exists)/i.test(error.message || '') || error.code === 'user_already_exists') {

@@ -4,7 +4,114 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import InstallApp from '@/components/InstallApp';
 import AlertSettings from '@/components/AlertSettings';
-import { TYPE_PRESETS, slug } from '@/lib/util';
+import { TYPE_PRESETS, slug, money, waLink } from '@/lib/util';
+import { DEFAULT_ERECEIPT_MESSAGE, ERECEIPT_TAGS, ereceiptMessage, hexOk, urlOk } from '@/lib/ereceipt-text';
+
+// Shrinks a logo to at most 256 px so it is small enough to keep with the business (well under 120 KB).
+function shrinkLogo(file) {
+  return new Promise((res, rej) => {
+    if (!/^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(file.type)) return rej(new Error('Choose a PNG, JPG or WEBP picture'));
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 256 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      let d = c.toDataURL('image/png');
+      if (d.length > 110000) d = c.toDataURL('image/webp', 0.85);
+      if (!d.startsWith('data:image/webp') || d.length > 110000) d = c.toDataURL('image/jpeg', 0.85);
+      d.length > 110000 ? rej(new Error('That picture is too detailed. Try a simpler logo.')) : res(d);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not read that picture')); };
+    img.src = url;
+  });
+}
+
+function EReceiptCard({ f, setF, set }) {
+  const [logoErr, setLogoErr] = useState('');
+  const sample = ereceiptMessage({ ...f, ereceipt_message: f.ereceipt_message }, {
+    customer: 'Wanjiku', receipt: 1024, total: money(1250, f.currency), date: 'today', link: 'https://uzaa.co.ke/r/...',
+  });
+  const numBad = f.ereceipt_whatsapp.trim() && !waLink(f.ereceipt_whatsapp);
+  const linkBad = f.ereceipt_link_url.trim() && !urlOk(f.ereceipt_link_url);
+  async function pickLogo(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLogoErr('');
+    try { setF((x) => ({ ...x, ereceipt_logo: '' })); const d = await shrinkLogo(file); setF((x) => ({ ...x, ereceipt_logo: d })); } catch (er) { setLogoErr(er.message); }
+  }
+  return (
+    <div className="card">
+      <h3>E-receipts on WhatsApp</h3>
+      <label className="row" style={{ marginBottom: 6 }}>
+        <input type="checkbox" checked={f.ereceipt_enabled} onChange={(e) => setF({ ...f, ereceipt_enabled: e.target.checked })} /> Send customers an e-receipt on WhatsApp
+      </label>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        After a sale the cashier taps <b>E-receipt</b>, types the customer's number, and WhatsApp opens with your thank-you
+        message and a link to a receipt page with your logo and colours. The message is sent from the WhatsApp on that till
+        phone, so log the till into your shop's WhatsApp (or WhatsApp Business) number. Free: no SMS or WhatsApp charges from Uzaa.
+      </p>
+      {f.ereceipt_enabled && (
+        <>
+          <label className="field"><span>Your shop's WhatsApp number (sends the receipts, and customers can chat to it)</span>
+            <input className="input" inputMode="tel" maxLength={20} placeholder="0722 000 111" value={f.ereceipt_whatsapp} onChange={set('ereceipt_whatsapp')} />
+          </label>
+          {numBad && <div className="err">Check the number. Use the format 0722 000 111 or +254 722 000 111.</div>}
+
+          <div className="field"><span>Logo on the receipt page</span>
+            <div className="row" style={{ alignItems: 'center' }}>
+              {f.ereceipt_logo
+                ? <img src={f.ereceipt_logo} alt="Your logo" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 12, border: '1px solid var(--line)', background: '#fff', padding: 4 }} />
+                : <span className="muted small">No logo yet.</span>}
+              <label className="btn small" style={{ cursor: 'pointer' }}>
+                {f.ereceipt_logo ? 'Change logo' : 'Upload logo'}
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={pickLogo} style={{ display: 'none' }} />
+              </label>
+              {f.ereceipt_logo && <button type="button" className="btn small danger" onClick={() => setF({ ...f, ereceipt_logo: '' })}>Remove</button>}
+            </div>
+            {logoErr && <div className="err">{logoErr}</div>}
+          </div>
+
+          <label className="field"><span>Brand colour</span>
+            <div className="row" style={{ alignItems: 'center' }}>
+              <input type="color" value={hexOk(f.ereceipt_color) ? f.ereceipt_color : '#0b5c87'} onChange={set('ereceipt_color')} style={{ width: 56, height: 44, border: 0, background: 'none', padding: 0 }} aria-label="Pick a colour" />
+              <input className="input" style={{ width: 130 }} maxLength={7} value={f.ereceipt_color} onChange={set('ereceipt_color')} aria-label="Colour code" />
+              <span style={{ flex: 1, height: 44, borderRadius: 10, background: hexOk(f.ereceipt_color) ? f.ereceipt_color : '#0b5c87' }} aria-hidden="true" />
+            </div>
+          </label>
+
+          <label className="field"><span>Thank-you message</span>
+            <textarea className="input" rows={6} maxLength={1000} placeholder={DEFAULT_ERECEIPT_MESSAGE} value={f.ereceipt_message} onChange={set('ereceipt_message')} />
+          </label>
+          <p className="muted small" style={{ marginTop: -4 }}>
+            Leave empty to use the standard message. These words are filled in for you: {ERECEIPT_TAGS.join(' ')}.
+            If you leave out {'{link}'}, the receipt link is added at the end.
+          </p>
+
+          <div className="row">
+            <label className="field grow"><span>Extra link name (optional)</span>
+              <input className="input" maxLength={60} placeholder="Leave us a Google review" value={f.ereceipt_link_label} onChange={set('ereceipt_link_label')} />
+            </label>
+            <label className="field grow"><span>Extra link address</span>
+              <input className="input" inputMode="url" maxLength={300} placeholder="https://g.page/r/..." value={f.ereceipt_link_url} onChange={set('ereceipt_link_url')} />
+            </label>
+          </div>
+          {linkBad && <div className="err">The extra link must start with https://</div>}
+
+          <label className="row" style={{ marginBottom: 10 }}>
+            <input type="checkbox" checked={f.ereceipt_powered} onChange={(e) => setF({ ...f, ereceipt_powered: e.target.checked })} /> Show "Powered by Uzaa" under the receipt
+          </label>
+
+          <div className="small"><b>What the customer gets</b></div>
+          <div className="tint small" style={{ whiteSpace: 'pre-line', wordBreak: 'break-word', marginTop: 6 }}>{sample}</div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function Categories({ businessId }) {
   const [rows, setRows] = useState([]);
@@ -99,6 +206,14 @@ export default function Settings() {
     notify_min: business.notify_min ?? 0,
     credit_enabled: !!business.credit_enabled,
     credit_limit: business.credit_limit ?? 5000,
+    ereceipt_enabled: !!business.ereceipt_enabled,
+    ereceipt_whatsapp: business.ereceipt_whatsapp || '',
+    ereceipt_message: business.ereceipt_message || '',
+    ereceipt_color: business.ereceipt_color || '#0b5c87',
+    ereceipt_logo: business.ereceipt_logo || '',
+    ereceipt_link_label: business.ereceipt_link_label || '',
+    ereceipt_link_url: business.ereceipt_link_url || '',
+    ereceipt_powered: business.ereceipt_powered !== false,
   });
   const [fields, setFields] = useState(business.custom_fields || []);
   const [msg, setMsg] = useState('');
@@ -117,6 +232,11 @@ export default function Settings() {
     setBusy(true); setErr(''); setMsg('');
     const methods = f.payment_methods.split(',').map((s) => s.trim()).filter(Boolean);
     if (!methods.length) { setBusy(false); return setErr('Add at least one payment method'); }
+    if (f.ereceipt_enabled) {
+      if (!f.ereceipt_whatsapp.trim() || !waLink(f.ereceipt_whatsapp)) { setBusy(false); return setErr('E-receipts: add your shop\'s WhatsApp number'); }
+      if (!hexOk(f.ereceipt_color)) { setBusy(false); return setErr('E-receipts: the brand colour must look like #0b5c87'); }
+    }
+    if (f.ereceipt_link_url.trim() && !urlOk(f.ereceipt_link_url)) { setBusy(false); return setErr('E-receipts: the extra link must start with https://'); }
     const cleaned = fields.filter((x) => x.label.trim()).map((x) => ({ key: x.key || slug(x.label), label: x.label.trim(), type: x.type }));
     const { error } = await supabase.from('businesses').update({
       name: f.name.trim(), business_type: f.business_type, item_label: f.item_label.trim() || 'Product',
@@ -127,6 +247,14 @@ export default function Settings() {
       credit_enabled: !!f.credit_enabled, credit_limit: Math.max(0, Number(f.credit_limit) || 0),
       notify_mode: f.notify_mode, notify_hour: Math.min(23, Math.max(0, Number(f.notify_hour) || 0)),
       notify_min: Math.max(0, Number(f.notify_min) || 0),
+      ereceipt_enabled: !!f.ereceipt_enabled,
+      ereceipt_whatsapp: f.ereceipt_whatsapp.trim().slice(0, 20),
+      ereceipt_message: f.ereceipt_message.trim().slice(0, 1000),
+      ereceipt_color: hexOk(f.ereceipt_color) ? f.ereceipt_color : '#0b5c87',
+      ereceipt_logo: f.ereceipt_logo,
+      ereceipt_link_label: f.ereceipt_link_label.trim().slice(0, 60),
+      ereceipt_link_url: f.ereceipt_link_url.trim().slice(0, 300),
+      ereceipt_powered: !!f.ereceipt_powered,
     }).eq('id', business.id);
     setBusy(false);
     if (error) return setErr(error.message);
@@ -242,6 +370,8 @@ export default function Settings() {
         <label className="field"><span>Header (address, PIN, phone)</span><textarea className="input" value={f.receipt_header} onChange={set('receipt_header')} /></label>
         <label className="field"><span>Footer message</span><textarea className="input" value={f.receipt_footer} onChange={set('receipt_footer')} /></label>
       </div>
+
+      <EReceiptCard f={f} setF={setF} set={set} />
 
       <div className="card">
         <h3>Install Uzaa on a phone or tablet</h3>

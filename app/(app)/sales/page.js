@@ -6,6 +6,7 @@ import { fmtDate, isoDate, money } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
 import PrintButtons from '@/components/PrintButtons';
+import EReceiptSend from '@/components/EReceiptSend';
 
 export default function Sales() {
   const { business, branches, profile } = useAuth();
@@ -15,6 +16,7 @@ export default function Sales() {
   const [rows, setRows] = useState([]);
   const [names, setNames] = useState({});
   const [view, setView] = useState(null);
+  const [eSend, setESend] = useState(null);
   const today = isoDate(new Date());
   const [xf, setXf] = useState(today.slice(0, 8) + '01');
   const [xt, setXt] = useState(today);
@@ -43,7 +45,9 @@ export default function Sales() {
 
   async function open(s) {
     const { data } = await supabase.from('sale_items').select('name,qty,price,unit').eq('sale_id', s.id);
-    setView({ sale: s, items: (data || []).map((i) => ({ ...i, qty: Number(i.qty), price: Number(i.price) })) });
+    let cust = null;
+    if (s.customer_id) ({ data: cust } = await supabase.from('customers').select('name,phone').eq('id', s.customer_id).maybeSingle());
+    setView({ sale: s, cust, items: (data || []).map((i) => ({ ...i, qty: Number(i.qty), price: Number(i.price) })) });
   }
 
   const total = rows.reduce((s, r) => s + Number(r.total), 0);
@@ -110,9 +114,15 @@ export default function Sales() {
           <Receipt business={business} branch={branches.find((b) => b.id === view.sale.branch_id)} sale={view.sale} items={view.items} cashier={names[view.sale.cashier_id]} />
           <div className="no-print" style={{ marginTop: 16 }}>
             <PrintButtons saleId={view.sale.id} />
+            {business.ereceipt_enabled && (
+              <button className="btn" style={{ width: '100%', marginTop: 12, background: '#25D366', borderColor: '#25D366', color: '#0b2e17' }} onClick={() => { setESend(view); setView(null); }}>Send e-receipt on WhatsApp</button>
+            )}
             <button className="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={() => setView(null)}>Close</button>
           </div>
         </Modal>
+      )}
+      {eSend && (
+        <EReceiptSend business={business} sale={eSend.sale} phone={eSend.cust?.phone || ''} name={eSend.cust?.name || ''} onClose={() => setESend(null)} />
       )}
     </>
   );

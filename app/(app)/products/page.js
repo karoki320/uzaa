@@ -54,10 +54,21 @@ export default function Products() {
     const r = await post('/api/barcode', { code: c });
     if (r.ok && r.data.found) {
       // fill the name only if it is still empty and the barcode has not changed meanwhile
-      setEdit((x) => (x && !x.id && x.barcode?.trim() === c && !x.name.trim() ? { ...x, name: r.data.name } : x));
-      setLook({ code: c, state: 'found', text: `Found: ${r.data.name}. Check the name, then add your selling price.` });
+      const d = r.data;
+      const cat = d.category && cats.find((k) => k.name.toLowerCase() === d.category.toLowerCase());
+      setEdit((x) => {
+        if (!x || x.id || x.barcode?.trim() !== c || x.name.trim()) return x;
+        return {
+          ...x,
+          name: d.name,
+          // unit and category only when another shop used them and this form still has the defaults
+          unit: d.unit && (x.unit || 'pc') === 'pc' ? d.unit : x.unit,
+          category: cat && !x.category ? cat.name : x.category,
+        };
+      });
+      setLook({ code: c, state: 'found', text: `Found (${d.source}): ${d.name}. Check it, then add your selling price.` });
     } else {
-      setLook({ code: c, state: 'none', text: r.data?.error || (r.ok ? 'Not in the free product database (common for local products). Type the name.' : 'Could not look the name up. Type it yourself.') });
+      setLook({ code: c, state: 'none', text: r.data?.error || (r.ok ? 'Not found in any product database yet. Type the name: the next Uzaa shop that scans it will get it filled in.' : 'Could not look the name up. Type it yourself.') });
     }
   }
 
