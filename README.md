@@ -16,9 +16,26 @@ update profiles set role = 'super_admin', business_id = null, branch_id = null w
 
 Sign out and in again: you land on the All businesses screen.
 
-## Onboarding a client
+## Onboarding a client (super admin)
 
-Send them to `/signup`. They pick a business type, and they are selling within minutes: add products (scan the barcode into the barcode box), add opening stock, sell. Owners add cashiers and managers under Staff and extra branches under Branches.
+Run `supabase/security-patch-12.sql` (or `apply-all.sql`) once. Then on the admin page:
+
+1. Press **Onboard a client**: proprietor, business, email, phone, kind of business, address. The owner is emailed a link to set a password, and the business waits for activation.
+2. Choose the service agreement: **Generate agreement** (plan, set-up fee, subscription, start date, minimum term, branches, how to pay, special terms) or **Upload my own PDF** (up to 3 MB).
+3. Send the private signing link on WhatsApp, by email, or copy it. The client reads the agreement on their phone, types their name, signs with a finger and ticks that they agree. The time, internet address and device are recorded with a SHA-256 fingerprint of the document.
+4. The client shows as **Signed** and appears under *Needs your attention*. Press **Activate** when payment is in. Download the signed PDF (or, for an uploaded PDF, the signature certificate) from the Agreements tab.
+
+Existing clients get an agreement from the **Agreement** button on their row. **New link** replaces a lost link; **Cancel** stops it. The agreement wording is in `lib/agreement.js` (`buildContent`); each agreement keeps the wording it was sent with, so editing the template never changes one already sent. The provider details come from `AGREEMENT_PROVIDER_*` and `AGREEMENT_SIGNATORY*` in Vercel (default: The Biziirise Solutions, Nairobi).
+
+The admin page also shows each client's sales today, last 7 and 30 days (with the change against the 30 days before), the owner's contacts, and whether they have signed in.
+
+## Uzaa Assistant
+
+Every signed-in screen has the Uzaa Assistant in the corner: a face that blinks, follows the pointer, thinks while it looks things up, smiles when it finds the answer and dozes off when left alone. It answers from the built-in how-to library in `lib/assistant-kb.js` (no AI service, works offline), only shows answers for the person's role, suggests topics for the screen they are on, and links straight to the right screen. Add an entry to `KB` to teach it something new. People can hide it (it leaves a small tab on the edge).
+
+## Self sign-up
+
+Or send them to `/signup`. They pick a business type, and they are selling within minutes: add products (scan the barcode into the barcode box), add opening stock, sell. Owners add cashiers and managers under Staff and extra branches under Branches.
 
 ## Hardware
 

@@ -46,6 +46,11 @@ module.exports = {
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
         ],
       },
+      // Agreement PDFs open in the browser's own PDF viewer, which the page policy above would block.
+      ...['/api/agreement/:path*', '/api/admin/agreements/pdf'].map((source) => ({
+        source,
+        headers: [{ key: 'Content-Security-Policy', value: "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'" }],
+      })),
     ];
   },
 };

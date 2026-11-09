@@ -10,6 +10,7 @@ import SyncStatus from '@/components/SyncStatus';
 import AcceptTerms from '@/components/AcceptTerms';
 import InstallBanner from '@/components/InstallBanner';
 import { listQueue } from '@/lib/offline';
+import UzaaAssistant from '@/components/UzaaAssistant';
 
 const NAV = [
   { href: '/agent', label: 'Businesses', roles: ['sales'] },
@@ -80,11 +81,13 @@ export default function Shell({ children }) {
     return (
       <div className="auth">
         <div className="card">
-          <h2>Account unavailable</h2>
+          <h2>{profile.active && business?.status === 'pending' ? 'Almost ready' : 'Account unavailable'}</h2>
           <p>
             {!profile.active
               ? 'Your account has been disabled. Please contact your business owner.'
-              : 'This business account is suspended. Please contact Uzaa support.'}
+              : business?.status === 'pending'
+                ? 'Your Uzaa account is set up and waiting to be activated. If you were sent a service agreement, sign it from the link you received. Uzaa will activate your account shortly after.'
+                : 'This business account is suspended. Please contact Uzaa support.'}
           </p>
           <button className="btn" onClick={signOut}>Sign out</button>
         </div>
@@ -115,6 +118,7 @@ export default function Shell({ children }) {
       </nav>
       <main className="page"><InstallBanner />{allowed ? children : null}</main>
       <BottomNav items={items} signOut={signOut} who={`${profile.full_name} (${profile.role.replace('_', ' ')})`} />
+      <UzaaAssistant role={profile.role} name={profile.full_name} />
     </>
   );
 }

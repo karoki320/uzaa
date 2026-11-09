@@ -1,17 +1,9 @@
-import { bad, ok, userClient, adminClient, serverReady, sameOrigin, readJson, clientIp, logEvent } from '@/lib/server';
+import { boss } from '@/lib/admin';
+import { bad, ok, adminClient, serverReady, sameOrigin, readJson, clientIp, logEvent } from '@/lib/server';
 
 export const dynamic = 'force-dynamic';
 
-// Only the Uzaa super admin, and only with two-step verification passed.
-async function boss(sb) {
-  const me = await userClient();
-  const { data } = await me.auth.getUser();
-  if (!data?.user) return null;
-  const { data: aal } = await me.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.currentLevel !== 'aal2') return null;
-  const { data: p } = await sb.from('profiles').select('id,role,active').eq('id', data.user.id).maybeSingle();
-  return p && p.role === 'super_admin' && p.active ? p : null;
-}
+// Only the Uzaa super admin, and only with the second step passed (authenticator app or emailed link).
 
 // What disappears with this business. Shown before anything is touched.
 export async function POST(req) {
