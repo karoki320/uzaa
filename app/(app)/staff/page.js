@@ -105,7 +105,7 @@ export default function Staff() {
         <Modal title="Set a password" onClose={() => setPwFor(null)}>
           <form onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(''); try { await call('PATCH', { id: pwFor.id, password: pwFor.password }); setPwFor(null); setToast('Password changed.'); } catch (ex) { setErr(ex.message); } setBusy(false); }}>
             <p className="muted small">{pwFor.email}</p>
-            <PasswordField value={pwFor.password} onChange={(v) => setPwFor({ ...pwFor, password: v })} email={pwFor.email} label="New password" />
+            <PasswordField value={pwFor.password} onChange={(v) => setPwFor({ ...pwFor, password: v })} email={pwFor.email} label="New password" confirm confirmLabel="Confirm new password" />
             {err && <div className="err">{err}</div>}
             <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Saving...' : 'Save password'}</button>
           </form>
@@ -123,7 +123,7 @@ export default function Staff() {
                 <button type="button" className={`btn small ${add.mode === 'password' ? 'primary' : ''}`} onClick={() => setAdd({ ...add, mode: 'password' })}>I will set a password</button>
               </div>
             </div>
-            {add.mode === 'password' && <PasswordField value={add.password} onChange={(v) => setAdd({ ...add, password: v })} email={add.email} label="Password (give it to them)" />}
+            {add.mode === 'password' && <PasswordField value={add.password} onChange={(v) => setAdd({ ...add, password: v })} email={add.email} label="Password (give it to them)" confirm />}
             <div className="row">
               <label className="field grow"><span>Role</span>
                 <select className="input" value={add.role} onChange={(e) => setAdd({ ...add, role: e.target.value })}>

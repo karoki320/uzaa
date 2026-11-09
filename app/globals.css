@@ -403,3 +403,5 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 }
 @media (prefers-reduced-motion: reduce) { .ua-fab, .uzface .uz-ant, .ua-panel, .ua-bubble { animation: none !important; } }
 @media print { .ua, .ua-peek { display: none !important; } }
+.pweye { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+@media (max-width: 420px) { .pweye span { display: none; } }

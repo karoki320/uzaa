@@ -89,7 +89,7 @@ export default function Signup() {
               <span>Email</span>
               <input className="input" type="email" required autoComplete="email" value={f.email} onChange={set('email')} />
             </label>
-            <PasswordField value={f.password} onChange={(v) => setF({ ...f, password: v })} email={f.email} />
+            <PasswordField value={f.password} onChange={(v) => setF({ ...f, password: v })} email={f.email} confirm />
           </>
         )}
         <label className="terms-tick">

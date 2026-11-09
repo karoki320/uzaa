@@ -1,4 +1,5 @@
 'use client';
+import PasswordField from '@/components/PasswordField';
 import { Suspense, useEffect, useState } from 'react';
 import Logo from '@/components/Logo';
 import Link from 'next/link';
@@ -57,10 +58,7 @@ function Form() {
           <span>Email</span>
           <input className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
-        <label className="field">
-          <span>Password</span>
-          <input className="input" type="password" autoComplete="current-password" required maxLength={200} value={password} onChange={(e) => setPassword(e.target.value)} />
-        </label>
+        <PasswordField value={password} onChange={setPassword} autoComplete="current-password" meter={false} maxLength={200} id="login-pw" />
         {needCaptcha && captchaOn && <Captcha onToken={setToken} resetKey={ck} />}
         {err && <div className="err" role="alert">{err}</div>}
         {info && <div className="note" role="status">{info}</div>}

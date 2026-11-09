@@ -11,7 +11,6 @@ function Form() {
   const invite = q.get('from') === 'invite';
   const [me, setMe] = useState(undefined);
   const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -22,7 +21,6 @@ function Form() {
   async function submit(e) {
     e.preventDefault();
     setErr('');
-    if (pw !== pw2) return setErr('The two passwords do not match');
     setBusy(true);
     const r = await post('/api/auth/reset', { password: pw });
     if (r.ok) return go(me?.mfaMode === 'email' ? '/login?e=admin_reset' : (r.data.next || '/home'));
@@ -54,8 +52,7 @@ function Form() {
       <h1>{invite ? 'Welcome to Uzaa' : 'Choose a new password'}</h1>
       <p className="muted">{invite ? `Choose a password for ${me.user.email}.` : `For ${me.user.email}.`}</p>
       <form onSubmit={submit} className="card">
-        <PasswordField value={pw} onChange={setPw} email={me.user.email} label="New password" />
-        <PasswordField value={pw2} onChange={setPw2} meter={false} label="Type it again" id="pw2" />
+        <PasswordField value={pw} onChange={setPw} email={me.user.email} label="New password" confirm confirmLabel="Type it again" />
         {err && <div className="err" role="alert">{err}</div>}
         <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Saving...' : invite ? 'Save and continue' : 'Save new password'}</button>
       </form>

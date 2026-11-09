@@ -41,7 +41,7 @@ function PasswordCard({ email }) {
           <label className="field"><span>6 digit code from your email</span>
             <input className="input code" inputMode="numeric" autoComplete="one-time-code" required maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} />
           </label>
-          <PasswordField value={pw} onChange={setPw} email={email} label="New password" />
+          <PasswordField value={pw} onChange={setPw} email={email} label="New password" confirm confirmLabel="Confirm new password" />
           <button className="btn primary" disabled={busy}>{busy ? 'Saving...' : 'Change password'}</button>{' '}
           <button type="button" className="linkbtn" onClick={() => { setStep(0); setM(null); }}>Cancel</button>
         </form>
