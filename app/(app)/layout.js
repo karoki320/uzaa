@@ -10,7 +10,6 @@ import SyncStatus from '@/components/SyncStatus';
 import AcceptTerms from '@/components/AcceptTerms';
 import InstallBanner from '@/components/InstallBanner';
 import { listQueue } from '@/lib/offline';
-import UzaaAssistant from '@/components/UzaaAssistant';
 
 const NAV = [
   { href: '/agent', label: 'Businesses', roles: ['sales'] },
@@ -118,7 +117,6 @@ export default function Shell({ children }) {
       </nav>
       <main className="page"><InstallBanner />{allowed ? children : null}</main>
       <BottomNav items={items} signOut={signOut} who={`${profile.full_name} (${profile.role.replace('_', ' ')})`} />
-      <UzaaAssistant role={profile.role} name={profile.full_name} />
     </>
   );
 }

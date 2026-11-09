@@ -372,7 +372,7 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 .ua-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--accent); color: #fff; }
 .ua-head .uzface { background: #fff; border-radius: 50%; flex: none; }
 .ua-x { background: rgba(255, 255, 255, .15); border: 0; color: #fff; font: inherit; font-weight: 700; font-size: 13px; border-radius: 10px; min-height: 34px; min-width: 34px; padding: 0 10px; cursor: pointer; }
-.ua-msgs { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
+.ua-msgs { position: relative; flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
 .ua-msg { max-width: 88%; padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; }
 .ua-msg.bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
 .ua-msg.me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
@@ -405,3 +405,38 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 @media print { .ua, .ua-peek { display: none !important; } }
 .pweye { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 @media (max-width: 420px) { .pweye span { display: none; } }
+
+/* agreement: next steps after signing */
+.agr-next { margin: 14px 0 18px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.agr-next h2 { margin: 0 0 10px; }
+ol.steps { list-style: none; counter-reset: st; padding: 0; margin: 0 0 12px; }
+ol.steps li { counter-increment: st; position: relative; padding: 0 0 14px 44px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+ol.steps li::before { content: counter(st); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); color: var(--accent); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+ol.steps li::after { content: ''; position: absolute; left: 14px; top: 32px; bottom: 2px; width: 2px; background: var(--line); }
+ol.steps li:last-child::after { display: none; }
+ol.steps li.done::before { content: '✓'; background: #1a6b3a; border-color: #1a6b3a; color: #fff; }
+ol.steps li span { font-size: 14px; color: var(--muted); }
+ol.steps li .btn { margin-top: 4px; text-decoration: none; display: inline-flex; align-items: center; }
+
+/* assistant: conversations and setup plan */
+.ua-opts { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ua-opts button, .ua-opts a { text-align: left; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); border-radius: 12px; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none; min-height: 40px; display: flex; align-items: center; }
+.ua-opts button:hover, .ua-opts a:hover { background: var(--tint); }
+.ua-chips button.strong { background: var(--accent); color: #fff; }
+.ua-plan { max-width: 100%; width: 100%; }
+.ua-prog { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin: 8px 0 4px; }
+.ua-prog i { display: block; height: 100%; background: #1a6b3a; transition: width .4s ease; }
+.ua-plan ol { list-style: none; padding: 0; margin: 4px 0 6px; }
+.ua-plan li { display: flex; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.ua-plan li:last-child { border-bottom: 0; }
+.ua-tick { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; margin-top: 2px; }
+.ua-plan li.done .ua-tick { background: #1a6b3a; border-color: #1a6b3a; color: #fff; }
+.ua-plan li.done .ua-ptitle { color: var(--muted); text-decoration: line-through; }
+.ua-ptitle { font-weight: 700; }
+.ua-pact { display: flex; gap: 12px; align-items: center; margin-top: 2px; font-size: 14px; font-weight: 700; }
+.ua-pact a { text-decoration: none; }
+.ua-pact .linkbtn { min-height: 30px; font-size: 13px; }
+@media (max-width: 899px) {
+  .ua.nonav { bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .ua-peek.nonav { bottom: calc(90px + env(safe-area-inset-bottom)); }
+}

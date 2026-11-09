@@ -1,5 +1,6 @@
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
+import AssistantHost from '@/components/AssistantHost';
 
 export const metadata = {
   title: 'Uzaa POS',
@@ -32,7 +33,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>{children}<AssistantHost /></AuthProvider>
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import { hit } from '@/lib/ratelimit';
 import { tokenOk, stamp, provider } from '@/lib/agreement';
 import SignAgreement from '@/components/SignAgreement';
 import Logo from '@/components/Logo';
+import AssistantPage, { AskUzaa } from '@/components/AssistantPage';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,8 +50,10 @@ export default async function AgreementPage({ params }) {
     );
   }
 
+  const signed = a.status === 'signed';
   return (
     <main className="agr">
+      <AssistantPage data={{ page: 'agreement', status: a.status, ref: a.ref, business: a.client_business || a.client_name, name: a.client_name }} />
       <div className="agr-card">
         <div className="agr-top">
           <Logo height={28} />
@@ -61,10 +64,31 @@ export default async function AgreementPage({ params }) {
         <p className="muted small" style={{ marginTop: 0 }}>Ref {a.ref} &middot; for {a.client_business || a.client_name}</p>
 
         {a.status === 'signed' ? (
-          <div className="agr-done" role="status">
-            <b>Signed by {a.signer_name}{a.signer_title ? `, ${a.signer_title}` : ''}</b>
-            <div className="small">{stamp(a.signed_at)}. A copy is below. {p.name} will activate your Uzaa account shortly.</div>
-          </div>
+          <>
+            <div className="agr-done" role="status">
+              <b>Signed by {a.signer_name}{a.signer_title ? `, ${a.signer_title}` : ''}</b>
+              <div className="small">{stamp(a.signed_at)}. Your copy is below.</div>
+            </div>
+            <section className="agr-next" aria-label="Your next steps">
+              <h2>Your next steps</h2>
+              <ol className="steps">
+                <li className="done"><b>Sign the agreement</b><span>Done. Thank you!</span></li>
+                <li>
+                  <b>Set your password</b>
+                  <span>Open the email from Uzaa that says &quot;You have been invited&quot; ({a.client_email || 'your email'}) and choose a password. Can&apos;t find it? Check Spam, or use Forgot password with the same email.</span>
+                  <a className="btn small" href="/forgot-password">Set or reset my password</a>
+                </li>
+                <li><b>Account activation</b><span>{p.name} activates your account once your first payment is in. You will then be able to sign in and sell.</span></li>
+                <li>
+                  <b>Set up your business</b>
+                  <span>Your business details, branches, products and stock, and your staff with their roles (owner, manager, cashier). The Uzaa Assistant asks you a few questions and builds your checklist.</span>
+                  <AskUzaa flow="afterSign" className="btn small primary">Plan my setup with Uzaa</AskUzaa>
+                </li>
+                <li><b>Make your first sale</b><span>Tap items, choose how they paid, press Charge.</span></li>
+              </ol>
+              <a className="btn" href="/login" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Sign in to Uzaa</a>
+            </section>
+          </>
         ) : (
           <p className="small">
             Hello {String(a.client_name || '').split(' ')[0] || 'there'}, please read the agreement below. When you are ready, sign at the bottom
