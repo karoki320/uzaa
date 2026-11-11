@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import InstallApp from '@/components/InstallApp';
+import ThemePick from '@/components/ThemePick';
 
 // Simple outline icons, one per screen (no emojis).
 const P = {
@@ -57,6 +58,7 @@ export default function BottomNav({ items, signOut, who }) {
                 <Icon k={n.href} /><span>{n.label}</span>
               </Link>
             ))}
+            <div style={{ padding: '10px 8px', borderBottom: '1px solid var(--line)' }}><ThemePick /></div>
             <InstallApp className="sheetinstall" onDone={() => setMore(false)}><Icon k="dl" /><span>Install app on this phone</span></InstallApp>
             <button type="button" onClick={signOut}><Icon k="out" /><span>Sign out</span></button>
           </div>

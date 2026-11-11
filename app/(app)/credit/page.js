@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { money, fmtDate, waLink } from '@/lib/util';
 import Modal from '@/components/Modal';
+import CountUp from '@/components/CountUp';
+
+const initials = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 export default function Credit() {
   const { business, profile, session } = useAuth();
@@ -29,6 +32,7 @@ export default function Credit() {
   }, [rows, q]);
   const owed = rows.reduce((s, r) => s + Number(r.balance || 0), 0);
   const owing = rows.filter((r) => Number(r.balance) > 0).length;
+  const biggest = rows.find((r) => Number(r.balance) > 0);   // the list comes sorted by balance
 
   async function saveCustomer() {
     const name = add.name.trim();
@@ -58,31 +62,41 @@ export default function Credit() {
   return (
     <>
       <div className="row between" style={{ marginBottom: 12 }}>
-        <h1>Credit</h1>
-        <button className="btn primary" onClick={() => { setAdd({ name: '', phone: '' }); setErr(''); }}>Add a customer</button>
+        <h1 style={{ margin: 0 }}>Credit</h1>
+        <button className="btn primary" onClick={() => { setAdd({ name: '', phone: '' }); setErr(''); }}>+ Customer</button>
       </div>
 
-      <div className="kpis">
-        <div className="kpi"><div className="v">{money(owed, cur)}</div><div className="l">Owed to you</div></div>
-        <div className="kpi"><div className="v">{owing}</div><div className="l">People owing</div></div>
-      </div>
+      <section className="hero">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="k">Owed to you</div>
+          <div className="big"><CountUp value={owed} format={(v) => money(v, cur)} /></div>
+          <p>{owing ? <><b>{owing}</b> {owing === 1 ? 'person owes' : 'people owe'} you{biggest ? <>. Most: <b>{biggest.name}</b>, {money(biggest.balance, cur)}</> : ''}.</> : 'Nobody owes you anything right now.'}</p>
+        </div>
+        <div className="hero-art" aria-hidden="true">
+          <i style={{ height: 52, background: '#F5CF86' }} /><i style={{ height: 34, background: '#85C6C1' }} /><i style={{ height: 22, background: '#A3A2D8' }} />
+        </div>
+      </section>
 
       <input className="input" style={{ marginBottom: 12 }} placeholder="Search a name or number" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search customers" />
       {err && <div className="err">{err}</div>}
 
       <div className="card">
         {list.length === 0 && <p className="muted" style={{ margin: 0 }}>{rows.length ? 'Nobody matches that.' : 'No customers yet. Add one, or choose Credit at the till.'}</p>}
-        {list.map((r) => (
-          <button key={r.id} className="debtrow" onClick={() => setOpen(r)}>
-            <div>
-              <b>{r.name}</b>
-              <div className="small muted">{r.phone || 'No number'}{r.last_sale ? ` · last ${fmtDate(r.last_sale)}` : ''}</div>
-            </div>
-            <div className={`amt ${Number(r.balance) > 0 ? 'owing' : 'clear'}`}>
-              {Number(r.balance) > 0 ? money(r.balance, cur) : 'Cleared'}
-            </div>
-          </button>
-        ))}
+        {list.map((r) => {
+          const owes = Number(r.balance) > 0;
+          const lim = Number(r.credit_limit) || 0;
+          return (
+            <button key={r.id} className="lrow" onClick={() => setOpen(r)}>
+              <span className="rank" style={{ background: owes ? 'var(--c-amber)' : 'var(--c-teal)' }}>{initials(r.name)}</span>
+              <span className="grow2">
+                <b style={{ fontSize: 14 }}>{r.name}</b>
+                <span>{r.phone || 'No number'}{r.last_sale ? ` · last ${fmtDate(r.last_sale)}` : ''}</span>
+                {owes && lim > 0 && <div className="lvl"><i style={{ width: `${Math.min(100, (Number(r.balance) / lim) * 100)}%`, background: Number(r.balance) >= lim ? '#E08A55' : '#E7AE3E' }} /></div>}
+              </span>
+              <span className="amt" style={{ color: owes ? '#7A2A00' : 'var(--muted)', fontWeight: owes ? 800 : 600 }}>{owes ? money(r.balance, cur) : 'Cleared'}</span>
+            </button>
+          );
+        })}
       </div>
 
       {add && (
@@ -148,9 +162,11 @@ function CustomerSheet({ row, cur, canEdit, business, userId, onClose, onChanged
 
   return (
     <Modal title={row.name} onClose={onClose}>
-      <div className="tint" style={{ marginBottom: 12 }}>
-        <b style={{ fontSize: 22 }}>{balance > 0 ? `${money(balance, cur)} owed` : 'Nothing owed'}</b>
-        <div className="small muted">{row.phone || 'No number saved'} &middot; limit {Number(row.credit_limit) > 0 ? money(row.credit_limit, cur) : 'none'}</div>
+      <div className="hero" style={{ marginBottom: 14, padding: 16 }}>
+        <div>
+          <div className="big" style={{ fontSize: 30 }}>{balance > 0 ? money(balance, cur) : 'Nothing owed'}</div>
+          <p style={{ fontSize: 13 }}>{balance > 0 ? 'owed' : ''} {row.phone || 'No number saved'} &middot; limit {Number(row.credit_limit) > 0 ? money(row.credit_limit, cur) : 'none'}</p>
+        </div>
       </div>
 
       {balance > 0 && (

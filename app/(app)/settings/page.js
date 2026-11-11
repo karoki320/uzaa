@@ -216,6 +216,8 @@ export default function Settings() {
     ereceipt_powered: business.ereceipt_powered !== false,
     cashier_add_products: business.cashier_add_products !== false,
     cashier_expense_limit: business.cashier_expense_limit ?? 2000,
+    supplier_name: business.supplier_name || '',
+    supplier_whatsapp: business.supplier_whatsapp || '',
   });
   const [fields, setFields] = useState(business.custom_fields || []);
   const [msg, setMsg] = useState('');
@@ -259,6 +261,9 @@ export default function Settings() {
       ereceipt_powered: !!f.ereceipt_powered,
       cashier_add_products: !!f.cashier_add_products,
       cashier_expense_limit: Math.max(0, Number(f.cashier_expense_limit) || 0),
+      // sent only when changed, so Settings still saves before patch 14 is run
+      ...(f.supplier_name !== (business.supplier_name || '') || f.supplier_whatsapp !== (business.supplier_whatsapp || '')
+        ? { supplier_name: f.supplier_name.trim().slice(0, 80), supplier_whatsapp: f.supplier_whatsapp.trim().slice(0, 20) } : {}),
     }).eq('id', business.id);
     setBusy(false);
     if (error) return setErr(error.message);
@@ -269,7 +274,18 @@ export default function Settings() {
   return (
     <form onSubmit={save} style={{ maxWidth: 720 }}>
       <h1>Settings</h1>
-      <p className="muted">Make Uzaa fit your business. Changes apply immediately to every screen and receipt.</p>
+      <section className="hero">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="k">Your business</div>
+          <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2 }}>{business.name}</div>
+          <p>Changes apply at once to every screen and receipt.</p>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+            {[['E-receipts', f.ereceipt_enabled], ['Credit', f.credit_enabled], ['Barcodes', f.barcode_enabled], ['Phone alerts', f.notify_mode !== 'off']].map(([l, on]) => (
+              <span key={l} style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: on ? 'rgba(133,198,193,0.25)' : 'rgba(255,255,255,0.1)', color: on ? '#BFEDE8' : '#B9CCDA' }}>{on ? '✓' : '○'} {l}</span>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <div className="card">
         <h3>Business</h3>
@@ -337,6 +353,15 @@ export default function Settings() {
             <AlertSettings />
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <h3>Your supplier</h3>
+        <p className="muted small" style={{ marginTop: 0 }}>Stock › Reorder sends the low-stock list here on WhatsApp.</p>
+        <div className="row">
+          <label className="field grow"><span>Name</span><input className="input" maxLength={80} value={f.supplier_name} onChange={set('supplier_name')} placeholder="e.g. Mombasa Perfume Wholesalers" /></label>
+          <label className="field grow"><span>WhatsApp number</span><input className="input" inputMode="tel" maxLength={20} value={f.supplier_whatsapp} onChange={set('supplier_whatsapp')} placeholder="0722 000 111" /></label>
+        </div>
       </div>
 
       <div className="card">

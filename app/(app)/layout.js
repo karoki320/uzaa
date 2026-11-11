@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import BottomNav from '@/components/BottomNav';
 import InstallApp from '@/components/InstallApp';
+import ThemePick from '@/components/ThemePick';
 import SyncStatus from '@/components/SyncStatus';
 import AcceptTerms from '@/components/AcceptTerms';
 import InstallBanner from '@/components/InstallBanner';
@@ -107,6 +108,7 @@ export default function Shell({ children }) {
         <div className="row">
           <SyncStatus />
           <span className="small muted desk-only">{profile.full_name} <span className="badge">{profile.role.replace('_', ' ')}</span></span>
+          <span className="desk-only" style={{ width: 210 }}><ThemePick label={false} /></span>
           <span className="desk-only"><InstallApp /></span>
           <button className="btn small desk-only" onClick={signOut}>Sign out</button>
         </div>

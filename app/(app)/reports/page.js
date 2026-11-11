@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PRESETS, isoDate, money, num, rangeFor } from '@/lib/util';
+import CountUp from '@/components/CountUp';
 
 // Colours for charts: chosen to stay apart in lightness, not only hue
 const PALETTE = ['#4E8FB5', '#85C6C1', '#8B89C9', '#E7AE3E', '#9CCFE0', '#E08A55', '#2F6F93'];
@@ -196,6 +197,38 @@ export default function Reports() {
   const label = PRESETS.find((p) => p.key === preset)?.label.toLowerCase() || '';
   const rp = pct(revenue, Number(pt?.revenue || 0));
 
+  // plain-language findings, most useful first; only ones the numbers really support
+  const insights = useMemo(() => {
+    if (!data || !revenue) return [];
+    const out = [];
+    const top = (data.top_products || [])[0];
+    const lowIds = new Set(low.map((x) => x.name));
+    if (top && lowIds.has(top.name)) out.push({ tone: 'amber', text: <><b>{top.name}</b> is your best seller and is running low. Reorder it before it runs out.</> , href: '/stock' });
+    if (heat.top && times.length >= 5) {
+      const share = Math.round((heat.top.v / times.length) * 100);
+      out.push({ tone: 'ice', text: <>Your busiest time is <b>{heat.top.day} {hourName(heat.top.h)} – {hourName(heat.top.h + 2)}</b>{share >= 10 ? <>, with {share}% of all sales</> : ''}.</> });
+    }
+    if (best && best.v > 0 && bars.length > 1) {
+      const share = Math.round((best.v / revenue) * 100);
+      if (share >= 25) out.push({ tone: 'teal', text: <><b>{oneDay ? `From ${best.label}` : best.label}</b> brought {share}% of the money {oneDay ? 'today' : 'in this period'}.</> });
+    }
+    if (top) {
+      const share = Math.round((Number(top.revenue) / revenue) * 100);
+      if (share >= 15) out.push({ tone: 'lav', text: <><b>{top.name}</b> made {share}% of your sales.</> });
+    }
+    if (pays.length > 1) {
+      const p = [...pays].sort((a, b) => b.v - a.v)[0];
+      out.push({ tone: 'teal', text: <>Most customers paid by <b>{p.name}</b> ({Math.round((p.v / payTotal) * 100)}%).</> });
+    }
+    if (exp && exp.total > 0) out.push({ tone: 'peach', text: <>Expenses took <b>{Math.round((exp.total / revenue) * 100)}%</b> of what you sold{exp.byCat[0] ? <>, mostly {exp.byCat[0].name.toLowerCase()}</> : ''}.</> });
+    if (rp !== null && Math.abs(rp) >= 20 && t.count && pt?.count) {
+      const avgNow = revenue / t.count, avgThen = Number(pt.revenue) / pt.count;
+      const ap = pct(avgNow, avgThen);
+      if (ap !== null && Math.abs(ap) >= 10) out.push({ tone: ap > 0 ? 'ice' : 'amber', text: <>Customers spent {ap > 0 ? 'more' : 'less'} per visit: <b>{money(avgNow, cur)}</b> against {money(avgThen, cur)} before.</> });
+    }
+    return out.slice(0, 4);
+  }, [data, revenue, low, heat, times, best, bars, oneDay, pays, payTotal, exp, rp, t, pt, cur]);
+
   return (
     <>
       <div className="row between no-print" style={{ marginBottom: 12 }}>
@@ -239,11 +272,26 @@ export default function Reports() {
               </div>
             </section>
 
+            {insights.length > 0 && (
+              <div className="card">
+                <div className="card-head"><h3>What stands out</h3><span className="pill">Insights</span></div>
+                {insights.map((x, i) => (
+                  <div className="lrow" key={i}>
+                    <span className="rank" style={{ width: 34, height: 34, borderRadius: 11, background: `var(--c-${x.tone})` }} aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9V16h7v-2.1A6 6 0 0012 3z" /></svg>
+                    </span>
+                    <span style={{ flex: 1, fontSize: 14, lineHeight: 1.45 }}>{x.text}</span>
+                    {x.href && <Link href={x.href} className="btn small">Go</Link>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="kpis">
-              <div className="kpi teal"><Ico d={I.trend} /><div className="l">Revenue</div><div className="v">{money(revenue, cur)}</div><Chip cur={revenue} prev={pt?.revenue} /></div>
-              <div className="kpi ice"><Ico d={I.receipt} /><div className="l">Sales</div><div className="v">{t.count}</div><Chip cur={t.count} prev={pt?.count} /></div>
+              <div className="kpi teal"><Ico d={I.trend} /><div className="l">Revenue</div><div className="v"><CountUp value={revenue} format={(v) => money(v, cur)} /></div><Chip cur={revenue} prev={pt?.revenue} /></div>
+              <div className="kpi ice"><Ico d={I.receipt} /><div className="l">Sales</div><div className="v"><CountUp value={t.count} /></div><Chip cur={t.count} prev={pt?.count} /></div>
               <div className="kpi"><Ico d={I.coin} /><div className="l">Average sale</div><div className="v">{t.count ? money(revenue / t.count, cur) : '-'}</div><Chip cur={t.count ? revenue / t.count : 0} prev={pt?.count ? Number(pt.revenue) / pt.count : 0} /></div>
-              <div className="kpi lav"><Ico d={I.spark} /><div className="l">{exp ? 'Net profit (you keep)' : 'Profit'}</div><div className="v">{money(net, cur)}</div>
+              <div className="kpi lav"><Ico d={I.spark} /><div className="l">{exp ? 'Net profit (you keep)' : 'Profit'}</div><div className="v"><CountUp value={net} format={(v) => money(v, cur)} /></div>
                 {noCost > 0 ? <span className="chip down">Missing cost prices</span> : <Chip cur={net} prev={prevNet} />}</div>
               {exp && <div className="kpi peach"><Ico d={I.out} /><div className="l">Expenses</div><div className="v">{money(exp.total, cur)}</div><Chip cur={exp.total} prev={exp.prev} /></div>}
               {exp && <div className="kpi"><Ico d={I.trend} /><div className="l">Gross profit</div><div className="v">{money(gross, cur)}</div><span className="chip">{revenue ? `${Math.round((gross / revenue) * 100)}% margin` : 'Sales less cost of goods'}</span></div>}
@@ -264,7 +312,7 @@ export default function Reports() {
                   {bars.map((b, i) => (
                     <div className="b" key={b.k} title={`${b.label}: ${money(b.v, cur)}`}>
                       {b.v === barMax && b.v > 0 && <em>{num(b.v)}</em>}
-                      <i style={{ height: `${Math.max(2.5, (b.v / barMax) * 100)}%`, background: b.v ? `linear-gradient(180deg, ${BAR_COLS[i % 7]}, ${BAR_COLS[i % 7]}CC)` : 'rgba(255,255,255,0.6)', animationDelay: `${i * 30}ms` }} />
+                      <i style={{ height: `${Math.max(2.5, (b.v / barMax) * 100)}%`, background: b.v ? `linear-gradient(180deg, ${BAR_COLS[i % 7]}, ${BAR_COLS[i % 7]}CC)` : 'var(--empty)', animationDelay: `${i * 30}ms` }} />
                       <span>{b.label}</span>
                     </div>
                   ))}
@@ -293,7 +341,7 @@ export default function Reports() {
                 {DAYS.map((d, i) => (
                   <div key={d} style={{ display: 'contents' }}>
                     <span style={{ alignSelf: 'center' }}>{d}</span>
-                    {heat.g[i].map((v, j) => <i key={j} title={`${d} ${hourName(BLOCKS[j])}: ${v} sale${v === 1 ? '' : 's'}`} style={{ background: v ? `rgba(11, 92, 135, ${(0.15 + (v / heat.max) * 0.75).toFixed(2)})` : 'rgba(255,255,255,0.55)' }} />)}
+                    {heat.g[i].map((v, j) => <i key={j} title={`${d} ${hourName(BLOCKS[j])}: ${v} sale${v === 1 ? '' : 's'}`} style={{ background: v ? `rgba(11, 92, 135, ${(0.15 + (v / heat.max) * 0.75).toFixed(2)})` : 'var(--empty)' }} />)}
                   </div>
                 ))}
               </div>

@@ -12,6 +12,11 @@ import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
 import EReceiptSend from '@/components/EReceiptSend';
 
+// each category gets its own pastel tile colour, so the till is quick to read at a glance
+const TILE_TONES = ['var(--c-teal)', 'var(--c-ice)', 'var(--c-lav)', 'var(--c-amber)', 'var(--c-peach)', 'var(--c-pale)'];
+const toneFor = (k) => { let h = 0; for (const ch of String(k || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return TILE_TONES[h % TILE_TONES.length]; };
+const initialsOf = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+
 // only what the till needs: no cost prices, no timestamps (smaller download on every refresh)
 const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active';
 
@@ -327,9 +332,10 @@ export default function POS() {
             const s = stock[p.id] ?? 0;
             return (
               <button key={p.id} className="tile" onClick={() => add(p)}>
+                <span className="av" style={{ background: toneFor(p.category || p.name) }} aria-hidden="true">{initialsOf(p.name)}</span>
                 <b>{p.name}</b>
                 <span className="p">{money(p.price, cur)}{p.unit && p.unit !== 'pc' ? <span className="s"> / {p.unit}</span> : null}</span>
-                {p.track_stock && <div className={`s ${s <= Number(p.low_stock_level) ? 'warn' : ''}`}>{num(s)}{lbl(p.unit)} in stock</div>}
+                {p.track_stock && <span className={`stk ${s <= 0 ? 'out' : s <= Number(p.low_stock_level) ? 'low' : ''}`}>{s <= 0 ? 'Out' : `${num(s)}${lbl(p.unit)} left`}</span>}
               </button>
             );
           })}
@@ -346,7 +352,8 @@ export default function POS() {
                 <button className="btn small" onClick={() => setFlash(null)} aria-label="Dismiss">Close</button>
               </div>
             ) : (
-            <div className="flashrow" role="status">
+            <div className="flashrow done" role="status">
+              <span className="ico" aria-hidden="true" style={{ background: 'var(--c-teal)', color: '#1E3A38' }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg></span>
               <div><b>Sale #{flash.no} saved.</b> {money(flash.total, cur)}{flash.change > 0 ? `, change ${money(flash.change, cur)}` : ''}
                 {flash.failed && <div className="err" style={{ margin: 0 }}>Could not prepare the printer link.</div>}</div>
               {mode !== 'never' && (flash.url

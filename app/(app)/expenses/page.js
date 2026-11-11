@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { fmtDate, isoDate, money } from '@/lib/util';
 import Modal from '@/components/Modal';
+import CountUp from '@/components/CountUp';
 
 const EXPENSE_CATEGORIES = ['Rent', 'Salaries & wages', 'Electricity', 'Water', 'Internet & airtime', 'Delivery', 'Transport', 'Fuel'];
 const FREQ = [['one-off', 'One-off'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']];
@@ -130,56 +131,64 @@ export default function Expenses() {
       )}
       {err && !edit && <div className="err" role="alert">{err}</div>}
 
-      <div className="kpis">
-        <div className="kpi pm spent"><div className="v">{money(total, cur)}</div><div className="l">Spent in {monthLabel}</div><div className="s">{rows.length} expense{rows.length === 1 ? '' : 's'}</div></div>
-        {byFreq.filter((f) => f.v > 0).map((f) => (
-          <div className="kpi" key={f.k}><div className="v">{money(f.v, cur)}</div><div className="l">{f.l}</div><div className="s">{total ? Math.round((f.v / total) * 100) : 0}% of the month</div></div>
-        ))}
-        {waiting.length > 0 && (
-          <button type="button" className="kpi pm credit" style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }} onClick={() => setOnlyOpen((v) => !v)}>
-            <div className="v">{waiting.length}</div><div className="l">{isCashier ? 'Not checked yet' : 'Waiting for you to check'}</div>
-            <div className="s">{onlyOpen ? 'Showing only these. Tap to show all.' : 'Tap to show only these'}</div>
-          </button>
-        )}
-      </div>
+      <section className="hero">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="k">Spent in {monthLabel}</div>
+          <div className="big"><CountUp value={total} format={(v) => money(v, cur)} /></div>
+          <p>{rows.length} expense{rows.length === 1 ? '' : 's'}{byCat[0] ? <>. Biggest: <b>{byCat[0][0]}</b>, {Math.round((byCat[0][1] / (total || 1)) * 100)}%</> : ''}</p>
+        </div>
+        <div className="hero-art" aria-hidden="true">
+          <i style={{ height: 50, background: '#F4B892' }} /><i style={{ height: 32, background: '#F5CF86' }} /><i style={{ height: 22, background: '#A3A2D8' }} />
+        </div>
+      </section>
+
+      {(byFreq.some((f) => f.v > 0) || waiting.length > 0) && (
+        <div className="kpis">
+          {byFreq.filter((f) => f.v > 0).map((f, i) => (
+            <div className={`kpi ${['peach', 'ice', 'lav', 'teal'][i % 4]}`} key={f.k}><div className="l">{f.l}</div><div className="v">{money(f.v, cur)}</div><div className="s">{total ? Math.round((f.v / total) * 100) : 0}% of the month</div></div>
+          ))}
+          {waiting.length > 0 && (
+            <button type="button" className="kpi amber" style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }} onClick={() => setOnlyOpen((v) => !v)}>
+              <div className="l">{isCashier ? 'Not checked yet' : 'Waiting for you to check'}</div><div className="v">{waiting.length}</div>
+              <div className="s">{onlyOpen ? 'Showing only these. Tap to show all.' : 'Tap to show only these'}</div>
+            </button>
+          )}
+        </div>
+      )}
 
       {byCat.length > 0 && (
         <div className="card">
-          <h3>Where the money went</h3>
-          {byCat.map(([name, v]) => (
-            <div key={name} style={{ marginBottom: 10 }}>
-              <div className="row between small"><b>{name}</b><span>{money(v, cur)} · {Math.round((v / total) * 100)}%</span></div>
-              <div style={{ height: 8, borderRadius: 6, background: 'var(--tint)', overflow: 'hidden' }}>
-                <div style={{ width: `${(v / max) * 100}%`, height: '100%', background: 'var(--accent)' }} />
-              </div>
+          <div className="card-head"><h3>Where the money went</h3></div>
+          {byCat.map(([name, v], i) => (
+            <div className="lrow" key={name}>
+              <span className="rank" style={{ background: ['var(--c-peach)', 'var(--c-amber)', 'var(--c-lav)', 'var(--c-ice)', 'var(--c-teal)'][i % 5] }}>{Math.round((v / (total || 1)) * 100)}%</span>
+              <span className="grow2"><b style={{ fontSize: 14 }}>{name}</b><div className="lvl"><i style={{ width: `${(v / max) * 100}%`, background: ['#E08A55', '#E7AE3E', '#8B89C9', '#4E8FB5', '#4FA39C'][i % 5] }} /></div></span>
+              <span className="amt">{money(v, cur)}</span>
             </div>
           ))}
         </div>
       )}
 
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>For</th><th>How often</th><th>Paid from</th>{!isCashier && <th>By</th>}<th className="num">Amount</th><th></th></tr></thead>
-          <tbody>
-            {shown.map((r) => (
-              <tr key={r.id}>
-                <td>{new Date(`${r.spent_on}T00:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}</td>
-                <td><b>{r.category}</b>{r.note ? <div className="small muted">{r.note}</div> : null}
-                  {branches.length > 1 && r.branch_id ? <div className="small muted">{branches.find((b) => b.id === r.branch_id)?.name}</div> : null}</td>
-                <td><span className="badge">{freqName(r.frequency)}</span></td>
-                <td>{r.paid_from}</td>
-                {!isCashier && <td>{names[r.user_id] || '-'}<div className="small muted">{fmtDate(r.created_at)}</div></td>}
-                <td className="num"><b>{money(r.amount, cur)}</b>{!r.reviewed && <div><span className="badge red">not checked</span></div>}</td>
-                <td className="right" style={{ whiteSpace: 'nowrap' }}>
-                  {!isCashier && !r.reviewed && <><button className="btn small primary" onClick={() => check(r)}>Checked</button>{' '}</>}
-                  {!isCashier && <><button className="btn small" onClick={() => { setErr(''); setEdit({ ...r, amount: String(r.amount), category: cats.includes(r.category) ? r.category : '__other', other: r.category }); }}>Edit</button>{' '}</>}
-                  {(!isCashier || !r.reviewed) && <button className="btn small danger" onClick={() => remove(r)}>Delete</button>}
-                </td>
-              </tr>
-            ))}
-            {shown.length === 0 && <tr><td colSpan="7" className="muted">No expenses in {monthLabel}.</td></tr>}
-          </tbody>
-        </table>
+      <div className="card">
+        <div className="card-head"><h3>All expenses</h3>{onlyOpen && <button className="pill" onClick={() => setOnlyOpen(false)} style={{ cursor: 'pointer' }}>Show all</button>}</div>
+        {shown.map((r) => (
+          <div className="lrow" key={r.id} style={{ flexWrap: 'wrap' }}>
+            <span className="rank" style={{ background: r.reviewed ? 'var(--c-pale)' : 'var(--c-amber)', fontSize: 11, lineHeight: 1.1, textAlign: 'center' }}>
+              {new Date(`${r.spent_on}T00:00:00`).toLocaleDateString('en-KE', { day: 'numeric' })}<br />{new Date(`${r.spent_on}T00:00:00`).toLocaleDateString('en-KE', { month: 'short' })}
+            </span>
+            <span className="grow2">
+              <b style={{ fontSize: 14 }}>{r.category} <span className="badge" style={{ fontSize: 11 }}>{freqName(r.frequency)}</span>{!r.reviewed && <span className="badge amber" style={{ fontSize: 11, marginLeft: 4 }}>not checked</span>}</b>
+              <span>{r.paid_from}{r.note ? ` · ${r.note}` : ''}{!isCashier ? ` · ${names[r.user_id] || '-'}` : ''}{branches.length > 1 && r.branch_id ? ` · ${branches.find((b) => b.id === r.branch_id)?.name || ''}` : ''}</span>
+            </span>
+            <span className="amt">{money(r.amount, cur)}</span>
+            <span style={{ display: 'flex', gap: 6, width: '100%', justifyContent: 'flex-end' }}>
+              {!isCashier && !r.reviewed && <button className="btn small primary" onClick={() => check(r)}>Checked</button>}
+              {!isCashier && <button className="btn small" onClick={() => { setErr(''); setEdit({ ...r, amount: String(r.amount), category: cats.includes(r.category) ? r.category : '__other', other: r.category }); }}>Edit</button>}
+              {(!isCashier || !r.reviewed) && <button className="btn small danger" onClick={() => remove(r)}>Delete</button>}
+            </span>
+          </div>
+        ))}
+        {shown.length === 0 && <p className="muted" style={{ margin: 0 }}>No expenses in {monthLabel}.</p>}
       </div>
 
       {edit && (

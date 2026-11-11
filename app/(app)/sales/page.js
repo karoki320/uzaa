@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import Link from 'next/link';
+import CountUp from '@/components/CountUp';
+import CloseDay, { Breakdown } from '@/components/CloseDay';
 import { fmtDate, isoDate, money } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
@@ -32,6 +34,10 @@ export default function Sales() {
   const [del, setDel] = useState(null);         // { reason, busy, err } while the owner deletes the open sale
   const isOwner = profile.role === 'owner';
   const [showX, setShowX] = useState(false);   // the Excel download panel
+  const [counts, setCounts] = useState([]);     // the day's cash counts (one per branch)
+  const [closing, setClosing] = useState(false);
+  const [seeCount, setSeeCount] = useState(null);
+  const closeBranch = branchId || profile.branch_id || (branches.length === 1 ? branches[0]?.id : '');
   const shift = (n) => { const d = new Date(`${day}T00:00:00`); d.setDate(d.getDate() + n); const k = isoDate(d); if (k <= today) setDay(k); };
   const today = isoDate(new Date());
   const [xf, setXf] = useState(today.slice(0, 8) + '01');
@@ -49,7 +55,10 @@ export default function Sales() {
     if (branchId) e = e.eq('branch_id', branchId);
     let g = isCashier ? null : supabase.from('sale_deletions').select('*').gte('sold_at', from.toISOString()).lt('sold_at', to.toISOString()).order('created_at', { ascending: false }).limit(100);
     if (g && branchId) g = g.eq('branch_id', branchId);
-    const [{ data }, ex, gd] = await Promise.all([q, e, g || Promise.resolve({ data: [] })]);
+    let cc = supabase.from('cash_counts').select('*').eq('day', day);
+    if (branchId) cc = cc.eq('branch_id', branchId);
+    const [{ data }, ex, gd, cr] = await Promise.all([q, e, g || Promise.resolve({ data: [] }), cc]);
+    setCounts(cr.error ? [] : cr.data || []);
     setRows(data || []);
     setSpent(ex.error ? [] : ex.data || []);     // before patch 13 the table is missing: show no expenses
     setGone(gd?.error ? [] : gd?.data || []);
@@ -150,7 +159,7 @@ export default function Sales() {
           <span className="k">{day === today ? 'Total for today' : `Total for ${new Date(`${day}T00:00:00`).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}`}</span>
           <span style={{ padding: '4px 12px', borderRadius: 999, background: 'rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 700 }}>{rows.length} sale{rows.length === 1 ? '' : 's'}</span>
         </div>
-        <div className="big" style={{ marginTop: 6 }}>{money(total, business.currency)}</div>
+        <div className="big" style={{ marginTop: 6 }}><CountUp value={total} format={(v) => money(v, business.currency)} /></div>
         <div className="splitbar" role="img" aria-label={byMethod.map((x) => `${x.name} ${money(x.total, business.currency)}`).join(', ')}>
           {byMethod.filter((x) => x.total > 0).map((x) => <i key={x.name} style={{ width: `${(x.total / (total || 1)) * 100}%`, background: TONE_BAR[tone(x.name)] }} />)}
         </div>
@@ -176,6 +185,35 @@ export default function Sales() {
             <div className="small muted">Cash sales {money(cashSales, business.currency)} less cash expenses {money(cashSpent, business.currency)}{spent.length ? ` · ${spent.length} expense${spent.length === 1 ? '' : 's'}, ${money(spentTotal, business.currency)} in all` : ''}</div>
           </div>
         </div>
+      )}
+
+      <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        {counts.length === 0 ? (
+          <>
+            <span className="rank" style={{ width: 52, height: 52, borderRadius: 18, background: 'var(--c-ice)' }} aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2B4E68" strokeWidth="2" strokeLinecap="round"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 2" /></svg></span>
+            <span style={{ flex: 1, minWidth: 160 }}><b>Close the day</b><br /><span className="small muted">Count the cash in the drawer. Uzaa checks it and tells the owner.</span></span>
+            {closeBranch
+              ? <button className="btn primary" onClick={() => setClosing(true)}>Count cash</button>
+              : <span className="small muted">Pick a branch above to close it.</span>}
+          </>
+        ) : counts.map((c) => {
+          const d = Number(c.diff);
+          return (
+            <button key={c.id} className="lrow" onClick={() => setSeeCount(c)} style={{ borderBottom: 0 }}>
+              <span className="rank" style={{ width: 52, height: 52, borderRadius: 18, background: d === 0 ? 'var(--c-teal)' : d < 0 ? 'var(--c-peach)' : 'var(--c-amber)' }}>{d === 0 ? 'OK' : d < 0 ? 'Short' : 'Over'}</span>
+              <span className="grow2"><b style={{ fontSize: 14 }}>{d === 0 ? 'Day closed: cash balanced' : d < 0 ? `Day closed: short ${money(-d, business.currency)}` : `Day closed: over ${money(d, business.currency)}`}</b>
+                <span>Counted {money(c.counted, business.currency)} of {money(c.expected, business.currency)}{branches.length > 1 ? ` · ${branches.find((b) => b.id === c.branch_id)?.name || ''}` : ''} · {names[c.user_id] || 'staff'}</span></span>
+              <span className="go" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M9 6l6 6-6 6" /></svg></span>
+            </button>
+          );
+        })}
+      </div>
+      {closing && <CloseDay business={business} branchId={closeBranch} day={day} onClose={() => { setClosing(false); load(); }} />}
+      {seeCount && (
+        <Modal title="Cash count" onClose={() => setSeeCount(null)}>
+          <Breakdown r={seeCount} cur={business.currency} />
+          {(seeCount.branch_id === closeBranch) && <button className="btn" style={{ width: '100%' }} onClick={() => { setSeeCount(null); setClosing(true); }}>Count again</button>}
+        </Modal>
       )}
 
       <div className="card">

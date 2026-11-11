@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { money, UNITS } from '@/lib/util';
@@ -8,6 +8,9 @@ import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
 import { post } from '@/lib/api';
 
+const TONES = ['var(--c-teal)', 'var(--c-ice)', 'var(--c-lav)', 'var(--c-amber)', 'var(--c-peach)', 'var(--c-pale)'];
+const toneFor = (k) => { let h = 0; for (const ch of String(k || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return TONES[h % TONES.length]; };
+const initialsOf = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const PAGE = 100;   // a phone draws 100 rows quickly; hundreds at once make the page sluggish
 const blank = { name: '', barcode: '', category: '', unit: 'pc', price: '', cost: '', track_stock: true, low_stock_level: 5, custom: {}, opening: '' };
 
@@ -32,6 +35,9 @@ export default function Products() {
   const [scan, setScan] = useState(null);   // 'find': look a product up, 'field': fill the barcode box
   const [limit, setLimit] = useState(PAGE);   // rows drawn on screen; search still covers everything
   useEffect(() => { setLimit(PAGE); }, [q]);
+  const [costMode, setCostMode] = useState(false);   // the "fill in cost prices" list
+  const [costs, setCosts] = useState({});            // typed costs in that list, by product id
+  const skipCost = useRef(false);                    // "save without a cost" was pressed
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('products').select('*').order('name').range(0, 4999);
@@ -101,12 +107,26 @@ export default function Products() {
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return t ? rows.filter((p) => p.name.toLowerCase().includes(t) || (p.barcode || '').includes(t) || (p.category || '').toLowerCase().includes(t)) : rows;
-  }, [rows, q]);
+    const base = costMode ? rows.filter((p) => p.active && !(Number(p.cost) > 0)) : rows;
+    return t ? base.filter((p) => p.name.toLowerCase().includes(t) || (p.barcode || '').includes(t) || (p.category || '').toLowerCase().includes(t)) : base;
+  }, [rows, q, costMode]);
+  const noCost = rows.filter((p) => p.active && !(Number(p.cost) > 0)).length;
+  const hidden = rows.filter((p) => !p.active).length;
+
+  async function saveCost(p) {
+    const v = Number(costs[p.id]);
+    if (!(v > 0)) return;
+    setRows((list) => list.map((r) => (r.id === p.id ? { ...r, cost: v } : r)));
+    const { error } = await supabase.from('products').update({ cost: v }).eq('id', p.id);
+    if (error) { setErr(error.message); load(); }
+  }
 
   async function save(e) {
     e.preventDefault();
     setErr('');
+    // profit and stock value need what the shop paid: ask once before saving a new item without it
+    if (!edit.id && !(Number(edit.cost) > 0) && !skipCost.current) { setEdit({ ...edit, askCost: true }); return; }
+    skipCost.current = false;
     setBusy(true);
     let category = (edit.category || '').trim();
     if (category === '__new') {
@@ -166,38 +186,62 @@ export default function Products() {
   return (
     <>
       <div className="row between" style={{ marginBottom: 12 }}>
-        <div><h1>{label}s</h1><div className="muted small">{rows.length} in catalogue</div></div>
+        <h1 style={{ margin: 0 }}>{label}s</h1>
         <div className="row" style={{ gap: 8 }}>
           {barcodeOn && <button className="btn" onClick={() => setScan('find')}>Scan</button>}
-          {canAdd && <button className="btn primary" onClick={() => setEdit({ ...blank })}>Add {label.toLowerCase()}</button>}
+          {canAdd && <button className="btn primary" onClick={() => { skipCost.current = false; setEdit({ ...blank }); }}>+ Add</button>}
         </div>
       </div>
-      <input className="input" placeholder={barcodeOn ? 'Search by name, barcode or category' : 'Search by name or category'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 12 }} />
-      <div className="card table-wrap">
-        <table>
-          <thead>
-            <tr><th>Name</th>{barcodeOn && <th>Barcode</th>}<th>Category</th><th className="num">Price</th>{canEdit && <th className="num">Cost</th>}<th>Status</th>{canEdit && <th></th>}</tr>
-          </thead>
-          <tbody>
-            {shown.slice(0, limit).map((p) => (
-              <tr key={p.id}>
-                <td><b>{p.name}</b></td>
-                {barcodeOn && <td>{p.barcode || '-'}</td>}
-                <td>{p.category || '-'}</td>
-                <td className="num">{money(p.price, business.currency)}<span className="muted small"> / {p.unit || 'pc'}</span></td>
-                {canEdit && <td className="num">{money(p.cost, business.currency)}</td>}
-                <td>{p.active ? <span className="badge">Active</span> : <span className="badge red">Hidden</span>}</td>
-                {canEdit && (
-                  <td className="right">
-                    <button className="btn small" onClick={() => setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' })}>Edit</button>{' '}
-                    <button className="btn small" onClick={() => toggle(p)}>{p.active ? 'Hide' : 'Show'}</button>
-                  </td>
-                )}
-              </tr>
-            ))}
-            {shown.length === 0 && <tr><td colSpan="8" className="muted">Nothing here yet.</td></tr>}
-          </tbody>
-        </table>
+
+      <section className="hero">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="k">In your catalogue</div>
+          <div className="big">{rows.length - hidden}</div>
+          <p>{label.toLowerCase()}s on sale{hidden ? `, ${hidden} hidden` : ''}{cats.length ? ` in ${cats.length} categor${cats.length === 1 ? 'y' : 'ies'}` : ''}.</p>
+        </div>
+        <div className="hero-art" aria-hidden="true">
+          <i style={{ height: 40, background: '#85C6C1' }} /><i style={{ height: 58, background: '#A3A2D8' }} /><i style={{ height: 28, background: '#F5CF86' }} />
+        </div>
+      </section>
+
+      {canEdit && noCost > 0 && (
+        <div className="alert">
+          <span className="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 6H9.5a3 3 0 000 6h5a3 3 0 010 6H6" /></svg></span>
+          <span>{costMode ? 'Type what you paid for each item. It saves as you go.' : <><b>{noCost} item{noCost === 1 ? ' has' : 's have'} no cost price.</b> Profit and stock value stay wrong until you add them.</>}</span>
+          <button className="btn small" onClick={() => { setCostMode((v) => !v); setQ(''); }}>{costMode ? 'Done' : 'Fill them in'}</button>
+        </div>
+      )}
+
+      <input className="input" placeholder={barcodeOn ? 'Search by name, barcode or category' : 'Search by name or category'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 12 }} aria-label="Search" />
+
+      <div className="card">
+        {shown.slice(0, limit).map((p) => {
+          const price = Number(p.price), cost = Number(p.cost);
+          const margin = price > 0 && cost > 0 ? Math.round(((price - cost) / price) * 100) : null;
+          return (
+            <div className="lrow" key={p.id} style={{ opacity: p.active ? 1 : 0.6, flexWrap: costMode ? 'wrap' : 'nowrap' }}>
+              <span className="rank" style={{ background: toneFor(p.category || p.name) }}>{initialsOf(p.name)}</span>
+              <span className="grow2">
+                <b style={{ fontSize: 14 }}>{p.name}{!p.active && <span className="badge red" style={{ marginLeft: 6, fontSize: 11 }}>Hidden</span>}</b>
+                <span>{[p.category, barcodeOn && p.barcode].filter(Boolean).join(' · ') || 'No category'}</span>
+                {canEdit && !costMode && <span>{cost > 0 ? `Cost ${money(cost, business.currency)}` : 'No cost price'}{margin !== null && <b style={{ color: margin < 10 ? '#7A2A00' : '#0A4F74' }}> · {margin}% margin</b>}</span>}
+              </span>
+              <span className="amt">{money(p.price, business.currency)}<span className="muted small" style={{ fontWeight: 600 }}> /{p.unit || 'pc'}</span></span>
+              {costMode ? (
+                <span style={{ display: 'flex', gap: 6, width: '100%' }}>
+                  <input className="input" inputMode="decimal" placeholder={`What you paid (${business.currency})`} value={costs[p.id] ?? ''} onChange={(e) => setCosts({ ...costs, [p.id]: e.target.value })} onBlur={() => saveCost(p)} onKeyDown={(e) => { if (e.key === 'Enter') saveCost(p); }} aria-label={`Cost price for ${p.name}`} style={{ minHeight: 44 }} />
+                  <button className="btn small primary" onClick={() => saveCost(p)} disabled={!(Number(costs[p.id]) > 0)}>Save</button>
+                </span>
+              ) : canEdit && (
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button className="btn small" onClick={() => { skipCost.current = false; setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' }); }}>Edit</button>
+                  <button className="btn small" onClick={() => toggle(p)}>{p.active ? 'Hide' : 'Show'}</button>
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {shown.length === 0 && <p className="muted" style={{ margin: 0 }}>{costMode ? 'Every item has a cost price now.' : 'Nothing here yet.'}</p>}
         {shown.length > limit && (
           <div style={{ padding: 12, textAlign: 'center' }}>
             <button className="btn" onClick={() => setLimit((n) => n + PAGE)}>Show more ({shown.length - limit} left)</button>
@@ -249,8 +293,16 @@ export default function Products() {
             )}
             <div className="row">
               <label className="field grow"><span>Selling price (per {unitName})</span><input className="input" required inputMode="decimal" value={edit.price} onChange={set('price')} /></label>
-              <label className="field grow"><span>Cost price (per {unitName})</span><input className="input" inputMode="decimal" value={edit.cost} onChange={set('cost')} /></label>
+              <label className="field grow"><span>What you paid (per {unitName})</span><input className="input" inputMode="decimal" value={edit.cost} onChange={(e) => setEdit({ ...edit, cost: e.target.value, askCost: false })} placeholder="Cost price" /></label>
             </div>
+            {Number(edit.price) > 0 && Number(edit.cost) > 0 && (
+              <p className="small" style={{ marginTop: -6 }}>You make <b>{money(Number(edit.price) - Number(edit.cost), business.currency)}</b> on each one ({Math.round(((Number(edit.price) - Number(edit.cost)) / Number(edit.price)) * 100)}% margin).</p>
+            )}
+            {edit.askCost && (
+              <div className="alert" style={{ marginBottom: 14 }}>
+                <span><b>What did you pay for it?</b> Without the cost price, Uzaa counts the whole selling price as profit.</span>
+              </div>
+            )}
             {fields.map((f) => (
               <label className="field" key={f.key}>
                 <span>{f.label}</span>
@@ -277,6 +329,7 @@ export default function Products() {
             )}
             {err && <div className="err">{err}</div>}
             <button className="btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Saving...' : 'Save'}</button>
+            {edit.askCost && <button className="btn" style={{ width: '100%', marginTop: 10 }} disabled={busy} onClick={() => { skipCost.current = true; }}>Save without a cost price</button>}
           </form>
         </Modal>
       )}

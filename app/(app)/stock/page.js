@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { money, num, fmtDate } from '@/lib/util';
 import Modal from '@/components/Modal';
+import Reorder from '@/components/Reorder';
 import CameraScanner from '@/components/CameraScanner';
 import { barcodeKeys, findByBarcode } from '@/lib/barcode';
 
@@ -12,7 +13,8 @@ const IN_REASONS = ['Received stock', 'Stock count correction', 'Returned by cus
 const OUT_REASONS = ['Damaged or expired', 'Returned to supplier', 'Stock count correction', 'Used in the shop', 'Other'];
 
 export default function Stock() {
-  const { business, branches, profile } = useAuth();
+  const { business, branches, profile, reload } = useAuth();
+  const [reorder, setReorder] = useState(false);
   const [branchId, setBranchId] = useState(profile.branch_id || branches[0]?.id || '');
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState({});
@@ -153,6 +155,14 @@ export default function Stock() {
         </div>
       )}
 
+      {lowCount > 0 && (
+        <button className="card" onClick={() => setReorder(true)} style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' }}>
+          <span className="rank" style={{ width: 52, height: 52, borderRadius: 18, background: '#25D366', color: '#0b2e17' }} aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h2l2.4 11h11L21 7H7" /><circle cx="9" cy="19" r="1.6" /><circle cx="17" cy="19" r="1.6" /></svg></span>
+          <span style={{ flex: 1 }}><b>Reorder {lowCount} low item{lowCount === 1 ? '' : 's'}</b><br /><span className="small muted">Send the list to {business.supplier_name || 'your supplier'} on WhatsApp</span></span>
+          <span className="go" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M9 6l6 6-6 6" /></svg></span>
+        </button>
+      )}
+
       {noCost > 0 && (
         <div className="alert">
           <span className="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 6H9.5a3 3 0 000 6h5a3 3 0 010 6H6" /></svg></span>
@@ -198,6 +208,11 @@ export default function Stock() {
         ))}
         {moves.length === 0 && <p className="muted" style={{ margin: 0 }}>No changes yet.</p>}
       </div>
+
+      {reorder && (
+        <Reorder business={business} isOwner={profile.role === 'owner'} onClose={() => setReorder(false)} onSaved={reload}
+          items={products.map((p) => ({ ...p, qty: stock[p.id] ?? 0 })).filter((p) => p.qty <= Number(p.low_stock_level)).sort((a, b) => a.qty - b.qty)} />
+      )}
 
       {scan && (
         <CameraScanner title={dir === 'in' ? 'Scan to add stock' : 'Scan to remove stock'} onCode={onScan} onClose={() => { setScan(false); load(); }}>
