@@ -17,7 +17,7 @@ export default function Stock() {
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState({});
   const [q, setQ] = useState('');
-  const [onlyLow, setOnlyLow] = useState(false);
+  const [show, setShow] = useState('all');   // all, low, out
   const [adj, setAdj] = useState(null);
   const [moves, setMoves] = useState([]);
   const [err, setErr] = useState('');
@@ -53,11 +53,15 @@ export default function Stock() {
     return products
       .map((p) => ({ ...p, qty: stock[p.id] ?? 0 }))
       .filter((p) => !t || p.name.toLowerCase().includes(t) || (p.barcode || '').includes(t))
-      .filter((p) => !onlyLow || p.qty <= Number(p.low_stock_level));
-  }, [products, stock, q, onlyLow]);
+      .filter((p) => show === 'all' || (show === 'out' ? p.qty <= 0 : p.qty > 0 && p.qty <= Number(p.low_stock_level)));
+  }, [products, stock, q, show]);
 
   const value = products.reduce((s, p) => s + Math.max(0, stock[p.id] ?? 0) * Number(p.cost), 0);
   const lowCount = products.filter((p) => (stock[p.id] ?? 0) <= Number(p.low_stock_level)).length;
+  const outCount = products.filter((p) => (stock[p.id] ?? 0) <= 0).length;
+  const noCost = products.filter((p) => !(Number(p.cost) > 0)).length;
+  const healthy = products.length ? Math.round(((products.length - lowCount) / products.length) * 100) : 100;
+  const C = 2 * Math.PI * 44;
 
   async function save(e) {
     e.preventDefault();
@@ -119,58 +123,80 @@ export default function Stock() {
   return (
     <>
       <div className="row between" style={{ marginBottom: 12 }}>
-        <h1>Stock</h1>
+        <h1 style={{ margin: 0 }}>Stock</h1>
         {branches.length > 1 && (
-          <select className="input" style={{ width: 220 }} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <select className="input" style={{ width: 200, minHeight: 44 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">
             {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         )}
       </div>
+
+      <section className="hero">
+        <div className="ring" style={{ width: 116, height: 116 }}>
+          <svg width="116" height="116" viewBox="0 0 116 116" role="img" aria-label={`${products.length - lowCount} of ${products.length} items are well stocked`} style={{ filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.35))' }}>
+            <circle cx="58" cy="58" r="44" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="18" />
+            <circle cx="58" cy="58" r="44" fill="none" stroke="#85C6C1" strokeWidth="18" strokeLinecap="round" strokeDasharray={`${(healthy / 100) * C} ${C}`} transform="rotate(-90 58 58)" />
+          </svg>
+          <b>{healthy}%<span>healthy</span></b>
+        </div>
+        <div style={{ flex: 1, display: 'grid', gap: 8 }}>
+          <div><div className="num" style={{ fontSize: 24, fontWeight: 800 }}>{products.length}</div><div className="k">items tracked</div></div>
+          <div><div className="num" style={{ fontSize: 24, fontWeight: 800, color: '#F5CF86' }}>{lowCount}</div><div className="k">low or out of stock</div></div>
+          <div><div className="num" style={{ fontSize: 18, fontWeight: 800 }}>{noCost === products.length && products.length ? 'Not known' : money(value, business.currency)}</div><div className="k">stock value at cost</div></div>
+        </div>
+      </section>
+
       {business.barcode_enabled !== false && (
-        <div className="row" style={{ marginBottom: 12, gap: 8 }}>
-          <button className="btn primary grow" onClick={() => openScan('in')}>Scan to add stock</button>
-          <button className="btn grow" onClick={() => openScan('out')}>Scan to remove stock</button>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          <button className="btn primary" onClick={() => openScan('in')} style={{ minHeight: 54 }}>+ Scan in</button>
+          <button className="btn" onClick={() => openScan('out')} style={{ minHeight: 54 }}>− Scan out</button>
         </div>
       )}
-      <div className="kpis">
-        <div className="kpi"><div className="v">{products.length}</div><div className="l">Tracked items</div></div>
-        <div className="kpi"><div className="v">{lowCount}</div><div className="l">Low or out of stock</div></div>
-        <div className="kpi"><div className="v">{money(value, business.currency)}</div><div className="l">Stock value at cost</div></div>
-      </div>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <input className="input grow" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-        <label className="row"><input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} /> Low stock only</label>
-      </div>
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th className="num">In stock</th><th className="num">Warn at</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id}>
-                <td><b>{p.name}</b></td>
-                <td className="num">{p.qty <= Number(p.low_stock_level) ? <span className="badge red">{num(p.qty)}</span> : num(p.qty)}</td>
-                <td className="num">{num(p.low_stock_level)}</td>
-                <td className="right"><button className="btn small" onClick={() => { setAdj({ p, change: '', reason: 'Received stock' }); setErr(''); }}>Receive / adjust</button></td>
-              </tr>
-            ))}
-            {rows.length === 0 && <tr><td colSpan="4" className="muted">No tracked items found.</td></tr>}
-          </tbody>
-        </table>
+
+      {noCost > 0 && (
+        <div className="alert">
+          <span className="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 6H9.5a3 3 0 000 6h5a3 3 0 010 6H6" /></svg></span>
+          <span>{noCost} item{noCost === 1 ? ' has' : 's have'} no cost price, so stock value and profit are not complete.</span>
+          <a href="/products" className="btn small" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Add costs</a>
+        </div>
+      )}
+
+      <input className="input" placeholder={`Search ${label.toLowerCase()}s or scan a barcode`} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 12 }} aria-label="Search stock" />
+      <div className="segs" role="tablist" aria-label="Show">
+        {[['all', `All ${products.length}`], ['low', `Low ${lowCount - outCount}`], ['out', `Out ${outCount}`]].map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={show === k} className={show === k ? 'on' : ''} onClick={() => setShow(k)} style={{ flex: 1 }}>{l}</button>
+        ))}
       </div>
 
       <div className="card">
-        <h3>Recent stock changes</h3>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>When</th><th>Item</th><th className="num">Change</th><th>Reason</th></tr></thead>
-            <tbody>
-              {moves.map((m) => (
-                <tr key={m.id}><td>{fmtDate(m.created_at)}</td><td>{m.products?.name}</td><td className="num">{Number(m.change) > 0 ? '+' : ''}{num(m.change)}</td><td>{m.reason}</td></tr>
-              ))}
-              {moves.length === 0 && <tr><td colSpan="4" className="muted">No changes yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        {rows.map((p) => {
+          const warn = Number(p.low_stock_level);
+          const st = p.qty <= 0 ? 'out' : p.qty <= warn ? 'low' : 'ok';
+          const L = { out: ['var(--c-peach)', '#E08A55', 'Out'], low: ['var(--c-amber)', '#E7AE3E', 'Low'], ok: ['var(--c-teal)', '#4FA39C', 'OK'] }[st];
+          return (
+            <div className="lrow" key={p.id}>
+              <span className="rank" style={{ width: 48, height: 48, borderRadius: 16, fontSize: 15, background: L[0] }}>{num(p.qty)}</span>
+              <span className="grow2">
+                <b style={{ fontSize: 14 }}>{p.name}</b>
+                <div className="lvl"><i style={{ width: `${Math.max(4, Math.min(100, (p.qty / Math.max(1, warn * 3)) * 100))}%`, background: L[1] }} /></div>
+                <span>{L[2]} · warn at {num(warn)}</span>
+              </span>
+              <button className="btn small" onClick={() => { setAdj({ p, change: '', reason: 'Received stock' }); setErr(''); }}>Adjust</button>
+            </div>
+          );
+        })}
+        {rows.length === 0 && <p className="muted" style={{ margin: 0 }}>No tracked items found.</p>}
+      </div>
+
+      <div className="card">
+        <div className="card-head"><h3>Recent stock changes</h3></div>
+        {moves.map((m) => (
+          <div className="lrow" key={m.id}>
+            <span className="rank" style={{ background: Number(m.change) > 0 ? 'var(--c-teal)' : 'var(--c-peach)', fontSize: 13 }}>{Number(m.change) > 0 ? '+' : ''}{num(m.change)}</span>
+            <span className="grow2"><b style={{ fontSize: 14 }}>{m.products?.name}</b><span>{m.reason} · {fmtDate(m.created_at)}</span></span>
+          </div>
+        ))}
+        {moves.length === 0 && <p className="muted" style={{ margin: 0 }}>No changes yet.</p>}
       </div>
 
       {scan && (

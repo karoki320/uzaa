@@ -2,11 +2,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import Link from 'next/link';
 import { fmtDate, isoDate, money } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
 import PrintButtons from '@/components/PrintButtons';
 import EReceiptSend from '@/components/EReceiptSend';
+
+const TONE_BAR = { cash: '#9CCFE0', mpesa: '#85C6C1', card: '#A3A2D8', credit: '#F5CF86', other: '#D6E1E9' };
+const TONE_ICON = {
+  cash: 'M3 6h18v12H3zM12 9.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5z',
+  mpesa: 'M7 2h10v20H7zM11 18h2',
+  card: 'M3 6h18v12H3zM3 10h18',
+  credit: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 2',
+  other: 'M4 12h16M12 4v16',
+};
 
 export default function Sales() {
   const { business, branches, profile } = useAuth();
@@ -21,6 +31,8 @@ export default function Sales() {
   const [gone, setGone] = useState([]);         // sales deleted from this day (owner and managers)
   const [del, setDel] = useState(null);         // { reason, busy, err } while the owner deletes the open sale
   const isOwner = profile.role === 'owner';
+  const [showX, setShowX] = useState(false);   // the Excel download panel
+  const shift = (n) => { const d = new Date(`${day}T00:00:00`); d.setDate(d.getDate() + n); const k = isoDate(d); if (k <= today) setDay(k); };
   const today = isoDate(new Date());
   const [xf, setXf] = useState(today.slice(0, 8) + '01');
   const [xt, setXt] = useState(today);
@@ -92,20 +104,24 @@ export default function Sales() {
   return (
     <>
       <div className="row between" style={{ marginBottom: 12 }}>
-        <h1>{isCashier ? 'My sales' : 'Sales'}</h1>
-        <div className="row">
-          <input className="input" type="date" style={{ width: 180 }} value={day} onChange={(e) => setDay(e.target.value)} />
+        <h1 style={{ margin: 0 }}>{isCashier ? 'My sales' : 'Sales'}</h1>
+        <div className="row" style={{ gap: 8 }}>
           {!isCashier && branches.length > 1 && (
-            <select className="input" style={{ width: 200 }} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+            <select className="input" style={{ width: 170, minHeight: 44 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">
               <option value="">All branches</option>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           )}
+          {!isCashier && (
+            <button className="btn small" aria-expanded={showX} onClick={() => setShowX((v) => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14" /></svg>Excel
+            </button>
+          )}
         </div>
       </div>
-      {!isCashier && (
+      {!isCashier && showX && (
         <div className="card no-print">
-          <h3>Download sales as Excel</h3>
+          <div className="card-head"><h3>Download sales as Excel</h3><button className="btn small" onClick={() => setShowX(false)}>Close</button></div>
           <div className="row" style={{ alignItems: 'flex-end' }}>
             <label className="field grow" style={{ marginBottom: 0 }}><span>From</span><input className="input" type="date" value={xf} max={xt} onChange={(e) => setXf(e.target.value)} /></label>
             <label className="field grow" style={{ marginBottom: 0 }}><span>To</span><input className="input" type="date" value={xt} min={xf} onChange={(e) => setXt(e.target.value)} /></label>
@@ -122,40 +138,68 @@ export default function Sales() {
           <p className="muted small" style={{ margin: '8px 0 0' }}>One file with every sale, every item sold, and totals by payment method. Up to one year at a time.</p>
         </div>
       )}
+
+      <div className="datenav">
+        <button className="round" aria-label="Previous day" onClick={() => shift(-1)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg></button>
+        <input type="date" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} aria-label="Day" />
+        <button className="round" aria-label="Next day" disabled={day >= today} onClick={() => shift(1)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
+      </div>
+
+      <section className="hero" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="k">{day === today ? 'Total for today' : `Total for ${new Date(`${day}T00:00:00`).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}`}</span>
+          <span style={{ padding: '4px 12px', borderRadius: 999, background: 'rgba(255,255,255,0.12)', fontSize: 12, fontWeight: 700 }}>{rows.length} sale{rows.length === 1 ? '' : 's'}</span>
+        </div>
+        <div className="big" style={{ marginTop: 6 }}>{money(total, business.currency)}</div>
+        <div className="splitbar" role="img" aria-label={byMethod.map((x) => `${x.name} ${money(x.total, business.currency)}`).join(', ')}>
+          {byMethod.filter((x) => x.total > 0).map((x) => <i key={x.name} style={{ width: `${(x.total / (total || 1)) * 100}%`, background: TONE_BAR[tone(x.name)] }} />)}
+        </div>
+        <p style={{ fontSize: 12 }}>{byMethod.length > 1 ? `${byMethod.map((x) => x.name).join(' and ')} add up to the total` : 'All sales for the day'}</p>
+      </section>
+
       <div className="kpis">
-        <div className="kpi total"><div className="v">{money(total, business.currency)}</div><div className="l">Total for the day</div><div className="s">{rows.length} sale{rows.length === 1 ? '' : 's'}</div></div>
         {byMethod.map((x) => (
           <div className={`kpi pm ${tone(x.name)}`} key={x.name}>
-            <div className="v">{money(x.total, business.currency)}</div>
+            <span className="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={TONE_ICON[tone(x.name)]} /></svg></span>
             <div className="l">{x.name}</div>
+            <div className="v">{money(x.total, business.currency)}</div>
             <div className="s">{x.count} sale{x.count === 1 ? '' : 's'}{total > 0 ? ` · ${Math.round((x.total / total) * 100)}%` : ''}{x.unpaid > 0 ? ` · ${money(x.unpaid, business.currency)} not paid yet` : ''}</div>
           </div>
         ))}
       </div>
       {(spent.length > 0 || cashSales > 0) && (
-        <div className="kpis">
-          <div className="kpi pm spent"><div className="v">{money(spentTotal, business.currency)}</div><div className="l">Expenses {isCashier ? 'you recorded' : 'today'}</div><div className="s">{spent.length} item{spent.length === 1 ? '' : 's'}</div></div>
-          <div className="kpi pm cash"><div className="v">{money(cashSales - cashSpent, business.currency)}</div><div className="l">Cash that should be in the drawer</div><div className="s">Cash sales {money(cashSales, business.currency)} less cash expenses {money(cashSpent, business.currency)}</div></div>
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span className="rank" style={{ width: 52, height: 52, borderRadius: 18, background: 'var(--c-lav)' }} aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2E2A5C" strokeWidth="2" strokeLinecap="round"><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M3 11h18M8 15h3" /></svg></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="small" style={{ fontWeight: 700, color: 'var(--muted)' }}>Cash that should be in the drawer</div>
+            <div className="num" style={{ fontSize: 24, fontWeight: 800 }}>{money(cashSales - cashSpent, business.currency)}</div>
+            <div className="small muted">Cash sales {money(cashSales, business.currency)} less cash expenses {money(cashSpent, business.currency)}{spent.length ? ` · ${spent.length} expense${spent.length === 1 ? '' : 's'}, ${money(spentTotal, business.currency)} in all` : ''}</div>
+          </div>
         </div>
       )}
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Receipt</th><th>Time</th><th>Branch</th><th>Cashier</th><th>Paid by</th><th className="num">Total</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((s) => (
-              <tr key={s.id}>
-                <td>#{s.receipt_no}{s.offline && <span className="badge" style={{ marginLeft: 6 }}>offline</span>}{s.price_diff && <span className="badge" style={{ marginLeft: 6, color: 'var(--error)' }} title="Sold at a price different from the list price">price differs</span>}</td>
-                <td>{fmtDate(s.created_at)}</td>
-                <td>{branches.find((b) => b.id === s.branch_id)?.name}</td>
-                <td>{names[s.cashier_id] || '-'}</td>
-                <td>{s.payment_method}</td>
-                <td className="num">{money(s.total, business.currency)}</td>
-                <td className="right"><button className="btn small" onClick={() => open(s)}>View</button></td>
-              </tr>
-            ))}
-            {rows.length === 0 && <tr><td colSpan="7" className="muted">No sales on this day.</td></tr>}
-          </tbody>
-        </table>
+
+      <div className="card">
+        <div className="card-head"><h3>Receipts</h3><span className="pill">Newest first</span></div>
+        {rows.length === 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 4px', textAlign: 'center' }}>
+            <span className="rank" style={{ width: 60, height: 60, borderRadius: 20, background: 'var(--c-ice)' }} aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2B4E68" strokeWidth="1.8" strokeLinecap="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h4" /></svg></span>
+            <b>{day === today ? 'No sales yet today' : 'No sales on this day'}</b>
+            {day === today && <Link href="/pos" className="btn primary small" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Open the till</Link>}
+          </div>
+        )}
+        {rows.map((s) => (
+          <button className="lrow" key={s.id} onClick={() => open(s)}>
+            <span className="rank" style={{ background: `var(--c-${tone(s.payment_method || '') === 'mpesa' ? 'teal' : tone(s.payment_method || '') === 'credit' ? 'amber' : tone(s.payment_method || '') === 'card' ? 'lav' : 'ice'})`, fontSize: 11 }}>{(s.payment_method || '?').slice(0, 4)}</span>
+            <span className="grow2">
+              <b style={{ fontSize: 14 }}>#{s.receipt_no} · {s.payment_method}
+                {s.offline && <span className="badge" style={{ marginLeft: 6 }}>offline</span>}
+                {s.price_diff && <span className="badge red" style={{ marginLeft: 6 }} title="Sold at a price different from the list price">price differs</span>}</b>
+              <span>{new Date(s.created_at).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' })} · {names[s.cashier_id] || '-'}{branches.length > 1 ? ` · ${branches.find((b) => b.id === s.branch_id)?.name || ''}` : ''}</span>
+            </span>
+            <span className="amt">{money(s.total, business.currency)}</span>
+            <span className="go" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M9 6l6 6-6 6" /></svg></span>
+          </button>
+        ))}
       </div>
 
       {view && (
