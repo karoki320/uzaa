@@ -214,6 +214,8 @@ export default function Settings() {
     ereceipt_link_label: business.ereceipt_link_label || '',
     ereceipt_link_url: business.ereceipt_link_url || '',
     ereceipt_powered: business.ereceipt_powered !== false,
+    cashier_add_products: business.cashier_add_products !== false,
+    cashier_expense_limit: business.cashier_expense_limit ?? 2000,
   });
   const [fields, setFields] = useState(business.custom_fields || []);
   const [msg, setMsg] = useState('');
@@ -255,6 +257,8 @@ export default function Settings() {
       ereceipt_link_label: f.ereceipt_link_label.trim().slice(0, 60),
       ereceipt_link_url: f.ereceipt_link_url.trim().slice(0, 300),
       ereceipt_powered: !!f.ereceipt_powered,
+      cashier_add_products: !!f.cashier_add_products,
+      cashier_expense_limit: Math.max(0, Number(f.cashier_expense_limit) || 0),
     }).eq('id', business.id);
     setBusy(false);
     if (error) return setErr(error.message);
@@ -333,6 +337,24 @@ export default function Settings() {
             <AlertSettings />
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <h3>Staff permissions</h3>
+        <label className="row" style={{ marginBottom: 6 }}>
+          <input type="checkbox" checked={f.cashier_add_products} onChange={(e) => setF({ ...f, cashier_add_products: e.target.checked })} /> Cashiers can add new {(f.item_label || 'product').toLowerCase()}s
+        </label>
+        <p className="muted small" style={{ marginTop: 0 }}>
+          Cashiers see the list under Products and can add an item that is missing, with its opening stock for their branch.
+          Only you and your managers can change prices, edit or hide items that already exist.
+        </p>
+        <label className="field" style={{ maxWidth: 320 }}><span>Largest expense a cashier can record ({f.currency})</span>
+          <input className="input" inputMode="decimal" value={f.cashier_expense_limit} onChange={set('cashier_expense_limit')} />
+        </label>
+        <p className="muted small" style={{ margin: 0 }}>
+          For small costs paid from the till, like delivery or fuel. Put 0 to stop cashiers recording expenses. You and your
+          managers check them under Expenses. Only you can delete a sale.
+        </p>
       </div>
 
       <div className="card">

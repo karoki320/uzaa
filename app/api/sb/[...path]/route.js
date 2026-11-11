@@ -10,6 +10,7 @@ const PASS_RES = ['content-type', 'content-range', 'content-profile', 'preferenc
 const MAX_BODY = 1_000_000;
 
 async function handle(req, ctx) {
+  const t0 = Date.now();
   const { path } = await ctx.params;
   const rel = (path || []).join('/');
   if (!/^rest\/v1\/[A-Za-z0-9_\-/]*$/.test(rel) || rel.includes('..')) {
@@ -38,8 +39,12 @@ async function handle(req, ctx) {
     body = buf;
   }
   const url = `${SUPA_URL}/${rel}${new URL(req.url).search}`;
+  const t1 = Date.now();
   const r = await fetch(url, { method: req.method, headers, body, cache: 'no-store' });
   const out = new Headers({ 'Cache-Control': 'no-store' });
+  // shows in the browser's Network tab (Timing): "auth" is the cookie check here, "db" the trip to Supabase.
+  // A large db time means this server and the database are far apart (see vercel.json regions).
+  out.set('Server-Timing', `auth;dur=${t1 - t0}, db;dur=${Date.now() - t1}`);
   PASS_RES.forEach((h) => { const v = r.headers.get(h); if (v) out.set(h, v); });
   return new NextResponse(r.status === 204 || req.method === 'HEAD' ? null : r.body, { status: r.status, headers: out });
 }

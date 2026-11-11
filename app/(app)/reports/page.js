@@ -10,7 +10,7 @@ function delta(cur, prev) {
   return `${p >= 0 ? '+' : ''}${p.toFixed(0)}% vs previous`;
 }
 
-function List({ title, rows, cur, qty }) {
+function List({ title, rows, cur, qty, unit = 'sales' }) {
   return (
     <div className="card">
       <h3>{title}</h3>
@@ -21,7 +21,7 @@ function List({ title, rows, cur, qty }) {
               <tr key={r.name}>
                 <td>{r.name}</td>
                 {qty && <td className="num">{num(r.qty)} sold</td>}
-                {!qty && <td className="num">{r.count} sales</td>}
+                {!qty && <td className="num">{r.count} {unit}</td>}
                 <td className="num"><b>{money(r.revenue, cur)}</b></td>
               </tr>
             ))}
@@ -42,6 +42,7 @@ export default function Reports() {
   const [prev, setPrev] = useState(null);
   const [low, setLow] = useState([]);
   const [err, setErr] = useState('');
+  const [exp, setExp] = useState(null);   // { total, prev, byCat } expenses for the period and the one before
 
   const range = useMemo(() => rangeFor(preset), [preset]);
 
@@ -60,6 +61,30 @@ export default function Reports() {
       setErr('');
       setData(a.data);
       setPrev(b.data);
+    });
+    return () => { off = true; };
+  }, [range, branchId]);
+
+  // expenses: what was spent in the period, so profit can show what the business really keeps
+  useEffect(() => {
+    let off = false;
+    const len = range.to - range.from;
+    const pf = new Date(range.from - len);
+    const q = (f, t) => {
+      let x = supabase.from('expenses').select('amount,category').gte('spent_on', isoDate(f)).lt('spent_on', isoDate(t)).range(0, 4999);
+      if (branchId) x = x.eq('branch_id', branchId);
+      return x;
+    };
+    Promise.all([q(range.from, range.to), q(pf, range.from)]).then(([a, b]) => {
+      if (off) return;
+      if (a.error) return setExp(null);          // patch 13 not run yet: keep the old screen
+      const m = {};
+      (a.data || []).forEach((e) => { m[e.category] = (m[e.category] || 0) + Number(e.amount); });
+      setExp({
+        total: (a.data || []).reduce((s, e) => s + Number(e.amount), 0),
+        prev: (b.data || []).reduce((s, e) => s + Number(e.amount), 0),
+        byCat: Object.entries(m).sort((x, y) => y[1] - x[1]).map(([name, revenue]) => ({ name, revenue, count: (a.data || []).filter((e) => e.category === name).length })),
+      });
     });
     return () => { off = true; };
   }, [range, branchId]);
@@ -120,7 +145,14 @@ export default function Reports() {
             <div className="kpis">
               <div className="kpi"><div className="v">{money(t.revenue, cur)}</div><div className="l">Revenue</div><div className="small muted">{delta(Number(t.revenue), Number(pt?.revenue))}</div></div>
               <div className="kpi"><div className="v">{t.count}</div><div className="l">Sales</div><div className="small muted">{delta(t.count, pt?.count)}</div></div>
-              <div className="kpi"><div className="v">{money(data.profit, cur)}</div><div className="l">Estimated profit</div><div className="small muted">{delta(Number(data.profit), Number(prev?.profit))}</div></div>
+              <div className="kpi"><div className="v">{money(data.profit, cur)}</div><div className="l">{exp ? 'Gross profit (sales less cost of goods)' : 'Estimated profit'}</div><div className="small muted">{delta(Number(data.profit), Number(prev?.profit))}</div></div>
+              {exp && <div className="kpi pm spent"><div className="v">{money(exp.total, cur)}</div><div className="l">Expenses</div><div className="small muted">{delta(exp.total, exp.prev)}</div></div>}
+              {exp && (
+                <div className={`kpi pm ${Number(data.profit) - exp.total >= 0 ? 'cash' : 'spent'}`}>
+                  <div className="v">{money(Number(data.profit) - exp.total, cur)}</div><div className="l">Net profit (what you keep)</div>
+                  <div className="small muted">{delta(Number(data.profit) - exp.total, Number(prev?.profit || 0) - exp.prev)}</div>
+                </div>
+              )}
               <div className="kpi"><div className="v">{t.count ? money(Number(t.revenue) / t.count, cur) : '-'}</div><div className="l">Average sale</div></div>
             </div>
             <div className="card">
@@ -140,6 +172,7 @@ export default function Reports() {
               <List title="By payment method" rows={data.by_payment} cur={cur} />
               <List title="By branch" rows={data.by_branch} cur={cur} />
               <List title="By cashier" rows={data.by_cashier} cur={cur} />
+              {exp && exp.byCat.length > 0 && <List title="Expenses by type" rows={exp.byCat} cur={cur} unit="entries" />}
             </div>
             <div className="card">
               <h3>Running low</h3>

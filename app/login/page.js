@@ -23,6 +23,13 @@ function Form() {
   const [info, setInfo] = useState('');
   // filled in when someone is sent here from the signup page
   useEffect(() => { const e = q.get('email'); if (e) setEmail(e); }, [q]);
+  // already signed in (for example the installed app reopened here): go to the shop, not the sign-in form
+  const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.user) go('/home'); else setChecking(false); })
+      .catch(() => setChecking(false));
+  }, []);
   const [busy, setBusy] = useState(false);
   const [needCaptcha, setNeedCaptcha] = useState(false);
   const [token, setToken] = useState('');
@@ -48,6 +55,8 @@ function Form() {
     if (r.data.captcha) { setNeedCaptcha(true); setCk((k) => k + 1); }
     r.ok ? setInfo(r.data.message) : setErr(r.data.error || 'Something went wrong');
   }
+
+  if (checking && !q.get('e')) return <div className="center">Loading...</div>;
 
   return (
     <div className="auth">

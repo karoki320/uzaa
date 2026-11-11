@@ -12,6 +12,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:description" content="Sell in a few taps, print to a Bluetooth printer, and keep selling with no network. From KES 2,500 per quarter.">
 <meta name="theme-color" content="#FCF9F0">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
@@ -208,9 +210,9 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
       <a href="#hardware">Hardware</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">Questions</a>
-      <a href="/signup">Create account</a>
+      <a href="/signup" data-in="hide">Create account</a>
     </nav>
-    <a class="btn ghost" href="/login">Sign in</a>
+    <a class="btn ghost" href="/login" data-in="shop">Sign in</a>
     <a class="btn primary" href="https://wa.me/254141025616?text=Hello%2C%20I%20would%20like%20a%20demo%20of%20Uzaa%20POS." rel="noopener">Book a demo</a>
   </div>
 </header>
@@ -608,5 +610,18 @@ footer{padding:36px 0 48px;color:var(--muted);font-size:15px;border-top:1px soli
 })();
 </script>
 <script type="module" src="/uzaa-assistant.js"></script>
+<script>
+// Already signed in? The installed app goes straight to the shop instead of this page, and in a
+// browser the header offers "Open my shop" instead of "Sign in" / "Create account".
+(function(){
+  var app = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+    if (!j || !j.user) return;
+    if (app) { location.replace('/home'); return; }
+    document.querySelectorAll('[data-in="hide"]').forEach(function(a){ a.style.display = 'none'; });
+    document.querySelectorAll('[data-in="shop"]').forEach(function(a){ a.textContent = 'Open my shop'; a.href = '/home'; });
+  }).catch(function(){});
+})();
+</script>
 </body>
 </html>

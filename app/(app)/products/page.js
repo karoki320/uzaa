@@ -8,11 +8,16 @@ import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
 import { post } from '@/lib/api';
 
+const PAGE = 100;   // a phone draws 100 rows quickly; hundreds at once make the page sluggish
 const blank = { name: '', barcode: '', category: '', unit: 'pc', price: '', cost: '', track_stock: true, low_stock_level: 5, custom: {}, opening: '' };
 
 export default function Products() {
   const { business, branches, profile } = useAuth();
   const label = business.item_label || 'Product';
+  // cashiers see the list and, when the owner allows it, add new items. Only owner and managers change existing ones.
+  const isCashier = profile.role === 'cashier';
+  const canEdit = !isCashier;
+  const canAdd = canEdit || business.cashier_add_products !== false;
   const fields = business.custom_fields || [];
   const [rows, setRows] = useState([]);
   const [cats, setCats] = useState([]);
@@ -25,6 +30,8 @@ export default function Products() {
   const [busy, setBusy] = useState(false);
   const [look, setLook] = useState(null);   // name lookup for a new barcode: { code, state, text }
   const [scan, setScan] = useState(null);   // 'find': look a product up, 'field': fill the barcode box
+  const [limit, setLimit] = useState(PAGE);   // rows drawn on screen; search still covers everything
+  useEffect(() => { setLimit(PAGE); }, [q]);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('products').select('*').order('name').range(0, 4999);
@@ -77,7 +84,9 @@ export default function Products() {
     const p = findByBarcode(rows, code);
     setScan(null);
     setErr('');
+    if (p && !canEdit) { setQ(p.name); return { ok: true, text: `${p.name} is already in the list` }; }
     if (p) setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' });
+    else if (!canAdd) return { ok: false, text: 'Not in the list. Ask the owner or a manager to add it.' };
     else { setEdit({ ...blank, barcode: code }); lookup(code); }
     return { ok: true, text: p ? p.name : `New: ${code}` };
   }
@@ -121,26 +130,33 @@ export default function Products() {
       custom: edit.custom || {},
     };
     let error;
+    let saved = null;
     if (edit.id) {
-      ({ error } = await supabase.from('products').update(payload).eq('id', edit.id));
-    } else {
-      const res = await supabase.from('products').insert({ ...payload, business_id: business.id }).select('id').single();
+      const res = await supabase.from('products').update(payload).eq('id', edit.id).select('*').single();
       error = res.error;
+      saved = res.data;
+    } else {
+      const res = await supabase.from('products').insert({ ...payload, business_id: business.id }).select('*').single();
+      error = res.error;
+      saved = res.data;
       if (!error && payload.track_stock && Number(edit.opening) > 0) {
-        const r2 = await supabase.rpc('adjust_stock', { p_product: res.data.id, p_branch: branchId, p_change: Number(edit.opening), p_reason: 'Opening stock' });
+        const r2 = await supabase.rpc('adjust_stock', { p_product: res.data.id, p_branch: isCashier ? profile.branch_id : branchId, p_change: Number(edit.opening), p_reason: 'Opening stock' });
         error = r2.error;
       }
     }
     setBusy(false);
-    if (error) return setErr(error.message.includes('products_barcode_uq') ? 'That barcode is already used by another item' : error.message);
+    if (error) return setErr(error.message.includes('products_barcode_uq') ? 'That barcode is already used by another item' : /row-level security|Not allowed/i.test(error.message) ? 'You are not allowed to do that. Ask the owner to let cashiers add items (Settings > Staff permissions).' : error.message);
     setEdit(null);
     setNewCat('');
-    load();
+    // put the saved row straight into the list instead of downloading every product again
+    if (saved) setRows((list) => (list.some((r) => r.id === saved.id) ? list.map((r) => (r.id === saved.id ? saved : r)) : [...list, saved]).sort((a, b) => a.name.localeCompare(b.name)));
+    else load();
   }
 
   async function toggle(p) {
-    await supabase.from('products').update({ active: !p.active }).eq('id', p.id);
-    load();
+    setRows((list) => list.map((r) => (r.id === p.id ? { ...r, active: !p.active } : r)));   // show it at once
+    const { error } = await supabase.from('products').update({ active: !p.active }).eq('id', p.id);
+    if (error) load();
   }
 
   const unitName = edit?.unit || 'unit';
@@ -153,33 +169,40 @@ export default function Products() {
         <div><h1>{label}s</h1><div className="muted small">{rows.length} in catalogue</div></div>
         <div className="row" style={{ gap: 8 }}>
           {barcodeOn && <button className="btn" onClick={() => setScan('find')}>Scan</button>}
-          <button className="btn primary" onClick={() => setEdit({ ...blank })}>Add {label.toLowerCase()}</button>
+          {canAdd && <button className="btn primary" onClick={() => setEdit({ ...blank })}>Add {label.toLowerCase()}</button>}
         </div>
       </div>
       <input className="input" placeholder={barcodeOn ? 'Search by name, barcode or category' : 'Search by name or category'} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 12 }} />
       <div className="card table-wrap">
         <table>
           <thead>
-            <tr><th>Name</th>{barcodeOn && <th>Barcode</th>}<th>Category</th><th className="num">Price</th><th className="num">Cost</th><th>Status</th><th></th></tr>
+            <tr><th>Name</th>{barcodeOn && <th>Barcode</th>}<th>Category</th><th className="num">Price</th>{canEdit && <th className="num">Cost</th>}<th>Status</th>{canEdit && <th></th>}</tr>
           </thead>
           <tbody>
-            {shown.map((p) => (
+            {shown.slice(0, limit).map((p) => (
               <tr key={p.id}>
                 <td><b>{p.name}</b></td>
                 {barcodeOn && <td>{p.barcode || '-'}</td>}
                 <td>{p.category || '-'}</td>
                 <td className="num">{money(p.price, business.currency)}<span className="muted small"> / {p.unit || 'pc'}</span></td>
-                <td className="num">{money(p.cost, business.currency)}</td>
+                {canEdit && <td className="num">{money(p.cost, business.currency)}</td>}
                 <td>{p.active ? <span className="badge">Active</span> : <span className="badge red">Hidden</span>}</td>
-                <td className="right">
-                  <button className="btn small" onClick={() => setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' })}>Edit</button>{' '}
-                  <button className="btn small" onClick={() => toggle(p)}>{p.active ? 'Hide' : 'Show'}</button>
-                </td>
+                {canEdit && (
+                  <td className="right">
+                    <button className="btn small" onClick={() => setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' })}>Edit</button>{' '}
+                    <button className="btn small" onClick={() => toggle(p)}>{p.active ? 'Hide' : 'Show'}</button>
+                  </td>
+                )}
               </tr>
             ))}
             {shown.length === 0 && <tr><td colSpan="8" className="muted">Nothing here yet.</td></tr>}
           </tbody>
         </table>
+        {shown.length > limit && (
+          <div style={{ padding: 12, textAlign: 'center' }}>
+            <button className="btn" onClick={() => setLimit((n) => n + PAGE)}>Show more ({shown.length - limit} left)</button>
+          </div>
+        )}
       </div>
 
       {edit && (
@@ -245,7 +268,7 @@ export default function Products() {
                 )}
               </div>
             )}
-            {!edit.id && edit.track_stock && branches.length > 1 && (
+            {!edit.id && edit.track_stock && branches.length > 1 && !isCashier && (
               <label className="field"><span>Opening stock goes to</span>
                 <select className="input" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
                   {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}

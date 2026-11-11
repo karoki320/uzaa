@@ -14,6 +14,11 @@ export async function GET() {
   const h = { 'Cache-Control': 'no-store' };
   const sb = await userClient();
   const { data, error } = await sb.auth.getUser();   // verified with Supabase, not just decoded
+  // Supabase unreachable for a moment: answer 503 so the phone opens from its saved copy instead of
+  // showing the sign-in screen. Only a real "not signed in" answer signs the person out.
+  if (error && (!error.status || error.status >= 500 || error.status === 429 || /fetch|network|timeout|retryable/i.test(`${error.name} ${error.message}`))) {
+    return NextResponse.json({ error: 'Busy, try again' }, { status: 503, headers: h });
+  }
   if (error || !data?.user) return NextResponse.json({ user: null }, { headers: h });
   const uid = data.user.id;
   const { data: s } = await sb.auth.getSession();

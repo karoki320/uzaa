@@ -440,3 +440,12 @@ ol.steps li .btn { margin-top: 4px; text-decoration: none; display: inline-flex;
   .ua.nonav { bottom: calc(16px + env(safe-area-inset-bottom)); }
   .ua-peek.nonav { bottom: calc(90px + env(safe-area-inset-bottom)); }
 }
+
+/* sales: one tile per payment method */
+.kpi.total { border-color: var(--accent); }
+.kpi.pm { border-left: 5px solid var(--line); }
+.kpi.pm.cash { border-left-color: #1a6b3a; }
+.kpi.pm.mpesa { border-left-color: #3bb54a; }
+.kpi.pm.card { border-left-color: #0b5c87; }
+.kpi.pm.credit { border-left-color: #c77700; }
+.kpi.pm.spent { border-left-color: var(--error); }

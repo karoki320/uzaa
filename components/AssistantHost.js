@@ -36,6 +36,13 @@ export default function AssistantHost() {
   // What the owner has already done, so the checklist ticks itself.
   const loadProgress = useCallback(async () => {
     if (!owner || !live || !business?.id) return;
+    // these are four counting queries: run them at most every 5 minutes, and never again once the
+    // shop has products and sales (the checklist is done), instead of on every page change
+    const key = `uzaa_progress_${business.id}`;
+    try {
+      const c = JSON.parse(sessionStorage.getItem(key) || 'null');
+      if (c && (c.done || Date.now() - c.at < 5 * 60 * 1000)) { setProgress(c.p); return; }
+    } catch {}
     const count = async (q) => { try { const { count: n } = await q; return n || 0; } catch { return 0; } };
     const [products, stocked, staff, sales] = await Promise.all([
       count(supabase.from('products').select('id', { count: 'exact', head: true })),
@@ -43,10 +50,12 @@ export default function AssistantHost() {
       count(supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('business_id', business.id)),
       count(supabase.from('sales').select('id', { count: 'exact', head: true })),
     ]);
-    setProgress({
+    const p = {
       products, stocked, staff, sales, branches: (branches || []).length,
       ereceipt: !!business.ereceipt_enabled, credit: !!business.credit_enabled, mfa: !!me?.mfaEnrolled,
-    });
+    };
+    setProgress(p);
+    try { sessionStorage.setItem(key, JSON.stringify({ p, at: Date.now(), done: products > 0 && sales > 0 })); } catch {}
   }, [owner, live, business, branches, me?.mfaEnrolled]);
   useEffect(() => { loadProgress(); }, [loadProgress, path]);
 

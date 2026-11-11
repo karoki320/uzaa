@@ -12,6 +12,9 @@ import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
 import EReceiptSend from '@/components/EReceiptSend';
 
+// only what the till needs: no cost prices, no timestamps (smaller download on every refresh)
+const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active';
+
 export default function POS() {
   const { profile, business, branches, session } = useAuth();
   const isCashier = profile.role === 'cashier';
@@ -62,7 +65,7 @@ export default function POS() {
     const saved = await getKv('products');
     if (saved) { setProducts((cur) => (cur.length ? cur : saved)); setFromCopy(true); }
     if (!navigator.onLine) return;
-    const { data, error } = await supabase.from('products').select('*').eq('active', true).order('name').range(0, 4999);
+    const { data, error } = await supabase.from('products').select(TILL_COLS).eq('active', true).order('name').range(0, 4999);
     if (!error && data) { setProducts(data); setFromCopy(false); saveKv('products', data.map(strip)); }
   }, []);
   useEffect(() => { loadProducts(); }, [loadProducts]);
@@ -222,7 +225,7 @@ export default function POS() {
     };
     if (offlineNow) return keep();
 
-    const { data: id, error, status } = await supabase.rpc('create_sale', {
+    const args = {
       p_branch: branchId,
       p_items: items.map((c) => ({ product_id: c.id, qty: c.qty })),
       p_payment: method,
@@ -231,16 +234,32 @@ export default function POS() {
       p_note: sale.note,
       p_client_id: sale.id,
       p_customer: sale.customer_id,
-    });
+    };
+    // one trip: record the sale and get its receipt number back together (create_sale_fast).
+    // Falls back to the old two-step way if the database patch has not been run yet.
+    let { data: row, error, status } = await supabase.rpc('create_sale_fast', args);
+    if (error && (error.code === 'PGRST202' || status === 404)) {
+      const r1 = await supabase.rpc('create_sale', args);
+      ({ error, status } = r1);
+      if (!error) ({ data: row } = await supabase.from('sales').select('id,receipt_no,total,amount_paid').eq('id', r1.data).single());
+    }
     if (error) {
       if (isNetwork(error, status) || status === 401) { sale.offlineTried = true; return keep(); }   // the sale may or may not have arrived; the id makes a re-send safe
       setBusy(false);
       return setErr(error.message);
     }
-    const { data: row } = await supabase.from('sales').select('id,receipt_no,total,amount_paid').eq('id', id).single();
+    const id = row?.id;
     finish();
-    loadStock();
-    syncQueue(session?.user?.id);   // also send anything that was waiting
+    // take the sold quantities off the stock shown on the till at once, then confirm with the
+    // server in the background (the till no longer waits for these before the next sale)
+    setStock((m) => {
+      const n = { ...m };
+      items.forEach((c) => { if (c.track) n[c.id] = Math.round(((n[c.id] ?? 0) - c.qty) * 1000) / 1000; });
+      saveKv(`stock:${branchId}`, n);
+      return n;
+    });
+    setBusy(false);
+    setTimeout(() => { loadStock(); syncQueue(session?.user?.id); }, 1500);   // also sends anything that was waiting
     post('/api/push/sale', { sale_id: id });   // the owner's phone, if they asked for it
     const info = { id, no: row?.receipt_no, total: row?.total, at: new Date().toISOString(), phone: customer?.phone || '', cname: customer?.name || '', change: Math.max(0, Number(row?.amount_paid || 0) - Number(row?.total || 0)), url: '', failed: false };
     setFlash(info);

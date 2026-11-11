@@ -12,6 +12,7 @@ const P = {
   '/stock': <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
   '/agent': <><path d="M4 9h16l-1.2-4H5.2z" /><path d="M5 9v11h14V9" /><path d="M10 20v-6h4v6" /></>,
   '/credit': <><path d="M3 7h18v10H3z" /><circle cx="12" cy="12" r="2.5" /><path d="M7 12h.01M17 12h.01" /></>,
+  '/expenses': <><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z" /><path d="M9 8h6M9 12h6M9 16h3" /></>,
   '/reports': <><path d="M4 20h16" /><path d="M6 16l4-5 3 3 5-7" /></>,
   '/branches': <><path d="M3 21h18M5 21V9l7-5 7 5v12" /><path d="M10 21v-6h4v6" /></>,
   '/staff': <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 3-6 6.5-6s6.5 2.4 6.5 6" /><path d="M16 5.2a3.5 3.5 0 010 5.6M18 14.4c2 .7 3.5 2.5 3.5 5.6" /></>,
