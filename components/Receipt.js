@@ -1,5 +1,8 @@
 'use client';
-import { fmtDate, num } from '@/lib/util';
+import { fmtDate, num, payLines } from '@/lib/util';
+
+// the cash part of a split (what it covered)
+const p0 = (sale) => payLines(sale).find((p) => p.method.toLowerCase() === 'cash')?.amount || 0;
 
 export default function Receipt({ business, branch, sale, items, cashier }) {
   const cur = business?.currency || 'KES';
@@ -32,7 +35,10 @@ export default function Receipt({ business, branch, sale, items, cashier }) {
         {Number(sale.tax) > 0 && <div className="ln"><span>Tax ({num(business?.tax_rate)}%)</span><span>{num(sale.tax)}</span></div>}
         <div className="ln"><b>TOTAL {cur}</b><b>{num(sale.total)}</b></div>
         <hr />
-        <div className="ln"><span>Paid by {sale.payment_method}</span><span>{num(sale.amount_paid)}</span></div>
+        {sale.payments?.length
+          ? <>{payLines(sale).map((p) => <div className="ln" key={p.method}><span>Paid by {p.method}</span><span>{num(p.amount)}</span></div>)}
+              {change > 0 && <div className="ln"><span>Cash given</span><span>{num(p0(sale) + change)}</span></div>}</>
+          : <div className="ln"><span>Paid by {sale.payment_method}</span><span>{num(sale.amount_paid)}</span></div>}
         {change > 0 && <div className="ln"><span>Change</span><span>{num(change)}</span></div>}
         <hr />
         <div className="c" style={{ whiteSpace: 'pre-line' }}>{business?.receipt_footer}</div>

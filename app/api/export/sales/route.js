@@ -69,7 +69,7 @@ export async function GET(req) {
   const ws = wb.addWorksheet('Sales');
   ws.columns = [
     { header: 'Receipt no', key: 'no', width: 11 }, { header: 'Date', key: 'd', width: 12 }, { header: 'Time', key: 't', width: 8 },
-    { header: 'Branch', key: 'b', width: 18 }, { header: 'Cashier', key: 'c', width: 20 }, { header: 'Paid by', key: 'pm', width: 12 },
+    { header: 'Branch', key: 'b', width: 18 }, { header: 'Cashier', key: 'c', width: 20 }, { header: 'Paid by', key: 'pm', width: 22 },
     { header: 'Items', key: 'n', width: 8 }, { header: 'Subtotal', key: 'sub', width: 13, style: { numFmt: money } },
     { header: 'Discount', key: 'dis', width: 12, style: { numFmt: money } }, { header: 'Tax', key: 'tax', width: 12, style: { numFmt: money } },
     { header: 'Total', key: 'tot', width: 13, style: { numFmt: money } }, { header: 'Amount paid', key: 'paid', width: 13, style: { numFmt: money } },
@@ -77,7 +77,7 @@ export async function GET(req) {
   head(ws);
   sales.forEach((s) => {
     const dt = new Date(s.created_at);
-    ws.addRow({ no: Number(s.receipt_no), d: dFmt.format(dt), t: tFmt.format(dt), b: bn[s.branch_id] || '', c: pn[s.cashier_id] || '', pm: s.payment_method || '',
+    ws.addRow({ no: Number(s.receipt_no), d: dFmt.format(dt), t: tFmt.format(dt), b: bn[s.branch_id] || '', c: pn[s.cashier_id] || '', pm: s.payments?.length ? s.payments.map((p) => `${p.method} ${Number(p.amount).toLocaleString('en-KE')}`).join(' + ') : s.payment_method || '',
       n: (s.sale_items || []).length, sub: Number(s.subtotal), dis: Number(s.discount), tax: Number(s.tax), tot: Number(s.total), paid: Number(s.amount_paid) });
   });
   const last = sales.length + 1;
@@ -116,7 +116,11 @@ export async function GET(req) {
   wp.columns = [{ header: 'Paid by', key: 'm', width: 18 }, { header: 'Sales', key: 'n', width: 10 }, { header: 'Total', key: 't', width: 14, style: { numFmt: money } }];
   head(wp);
   const by = {};
-  sales.forEach((s) => { const m = s.payment_method || 'Other'; by[m] = by[m] || { n: 0, t: 0 }; by[m].n += 1; by[m].t += Number(s.total); });
+  // a split sale counts under each of its methods, with the part each one paid
+  sales.forEach((s) => {
+    const parts = s.payments?.length ? s.payments.map((p) => [p.method, Number(p.amount)]) : [[s.payment_method || 'Other', Number(s.total)]];
+    parts.forEach(([m, t]) => { by[m] = by[m] || { n: 0, t: 0 }; by[m].n += 1; by[m].t += t; });
+  });
   Object.entries(by).forEach(([m, v]) => wp.addRow({ m, n: v.n, t: v.t }));
 
   const buf = await wb.xlsx.writeBuffer();

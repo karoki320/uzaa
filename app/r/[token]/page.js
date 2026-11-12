@@ -4,7 +4,7 @@ import { adminClient, serverReady } from '@/lib/server';
 import { hit } from '@/lib/ratelimit';
 import { readReceipt } from '@/lib/ereceipt';
 import { hexOk, urlOk } from '@/lib/ereceipt-text';
-import { waLink } from '@/lib/util';
+import { waLink, payLines } from '@/lib/util';
 import PrintPage from '@/components/PrintPage';
 export const dynamic = 'force-dynamic';
 
@@ -123,7 +123,9 @@ export default async function EReceipt({ params }) {
           {Number(sale.discount) > 0 && <div className="er-row"><span>Discount</span><span>-{n2(sale.discount)}</span></div>}
           {Number(sale.tax) > 0 && <div className="er-row"><span>Tax ({n2(b.tax_rate)}%)</span><span>{n2(sale.tax)}</span></div>}
           <div className="er-row er-grand"><span>Total {cur}</span><span>{n2(sale.total)}</span></div>
-          <div className="er-row"><span>Paid by {sale.payment_method}</span><span>{n2(sale.amount_paid)}</span></div>
+          {sale.payments?.length
+            ? payLines(sale).map((p) => <div className="er-row" key={p.method}><span>Paid by {p.method}</span><span>{n2(p.amount)}</span></div>)
+            : <div className="er-row"><span>Paid by {sale.payment_method}</span><span>{n2(sale.amount_paid)}</span></div>}
           {change > 0 && <div className="er-row"><span>Change</span><span>{n2(change)}</span></div>}
           {isCredit && owing > 0 && <div className="er-row"><span>Balance on credit</span><span>{n2(owing)}</span></div>}
         </section>

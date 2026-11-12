@@ -695,3 +695,13 @@ button.lrow { cursor: pointer; }
 @media (min-width: 900px) { .selbar { left: 50%; right: auto; transform: translateX(-50%); width: min(720px, calc(100vw - 40px)); animation: none; } }
 [data-theme="dark"] .selbar { background: #142030; }
 [data-theme="dark"] .lrow.picked { background: rgba(140, 203, 240, 0.12); }
+/* till: split payment (part cash, part M-Pesa) */
+.splitbox { display: grid; gap: 6px; margin: 4px 0 8px; padding: 10px; border-radius: 16px; background: var(--glass); border: var(--glass-edge); }
+.splitrow { display: flex; align-items: center; gap: 8px; }
+.splitrow > span { width: 70px; flex: none; font-size: 13px; font-weight: 700; }
+.splitrow .input { flex: 1; min-width: 0; min-height: 42px; font-size: 16px; font-weight: 700; text-align: right; }
+.splitsum { font-size: 13px; padding: 6px 10px; border-radius: 10px; }
+.splitsum.due { background: #FFF1D2; color: #6B4300; }
+.splitsum.ok { background: #DDF1EE; color: #1E4A46; }
+[data-theme="dark"] .splitsum.due { background: #4B3B17; color: #F3D58E; }
+[data-theme="dark"] .splitsum.ok { background: #1F4D49; color: #BFEDE8; }

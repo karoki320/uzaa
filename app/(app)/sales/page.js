@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import Link from 'next/link';
 import CountUp from '@/components/CountUp';
 import CloseDay, { Breakdown } from '@/components/CloseDay';
-import { fmtDate, isoDate, money } from '@/lib/util';
+import { fmtDate, isoDate, money, payLines, payLabel } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
 import PrintButtons from '@/components/PrintButtons';
@@ -88,12 +88,14 @@ export default function Sales() {
     const m = new Map();
     (business.payment_methods || ['Cash']).forEach((k) => m.set(k.toLowerCase(), { name: k, total: 0, count: 0, unpaid: 0 }));
     rows.forEach((r) => {
-      const name = r.payment_method || 'Other';
-      const k = name.toLowerCase();
-      if (!m.has(k)) m.set(k, { name, total: 0, count: 0, unpaid: 0 });
-      const x = m.get(k);
-      x.total += Number(r.total) || 0; x.count += 1;
-      if (k === 'credit') x.unpaid += Math.max(0, Number(r.total) - Number(r.amount_paid || 0));
+      payLines(r).forEach((p) => {                 // a split sale counts under each of its methods
+        const name = p.method || 'Other';
+        const k = name.toLowerCase();
+        if (!m.has(k)) m.set(k, { name, total: 0, count: 0, unpaid: 0 });
+        const x = m.get(k);
+        x.total += p.amount; x.count += 1;
+        if (k === 'credit') x.unpaid += Math.max(0, Number(r.total) - Number(r.amount_paid || 0));
+      });
     });
     return [...m.values()].filter((x) => x.count > 0 || ['cash', 'm-pesa', 'mpesa'].includes(x.name.toLowerCase()));
   }, [rows, business.payment_methods]);
@@ -227,9 +229,9 @@ export default function Sales() {
         )}
         {rows.map((s) => (
           <button className="lrow" key={s.id} onClick={() => open(s)}>
-            <span className="rank" style={{ background: `var(--c-${tone(s.payment_method || '') === 'mpesa' ? 'teal' : tone(s.payment_method || '') === 'credit' ? 'amber' : tone(s.payment_method || '') === 'card' ? 'lav' : 'ice'})`, fontSize: 11 }}>{(s.payment_method || '?').slice(0, 4)}</span>
+            <span className="rank" style={{ background: `var(--c-${tone(s.payment_method || '') === 'mpesa' ? 'teal' : tone(s.payment_method || '') === 'credit' ? 'amber' : tone(s.payment_method || '') === 'card' ? 'lav' : 'ice'})`, fontSize: 11 }}>{s.payments ? 'Split' : (s.payment_method || '?').slice(0, 4)}</span>
             <span className="grow2">
-              <b style={{ fontSize: 14 }}>#{s.receipt_no} · {s.payment_method}
+              <b style={{ fontSize: 14 }}>#{s.receipt_no} · {payLabel(s)}
                 {s.offline && <span className="badge" style={{ marginLeft: 6 }}>offline</span>}
                 {s.price_diff && <span className="badge red" style={{ marginLeft: 6 }} title="Sold at a price different from the list price">price differs</span>}</b>
               <span>{new Date(s.created_at).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' })} · {names[s.cashier_id] || '-'}{branches.length > 1 ? ` · ${branches.find((b) => b.id === s.branch_id)?.name || ''}` : ''}</span>

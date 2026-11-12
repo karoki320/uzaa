@@ -34,6 +34,9 @@ export default function POS() {
   const methods = creditOn && !baseMethods.some((m) => m.toLowerCase() === 'credit') ? [...baseMethods, 'Credit'] : baseMethods;
   const [method, setMethod] = useState(methods[0]);
   const [paid, setPaid] = useState('');
+  // split payment: part cash, part M-Pesa (or any 2 to 4 of the shop's ways of paying, never credit)
+  const splitMethods = baseMethods.filter((m) => m.toLowerCase() !== 'credit');
+  const [split, setSplit] = useState({ vals: {}, auto: '', shown: splitMethods.slice(0, 2) });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [cat, setCat] = useState('');
@@ -172,8 +175,27 @@ export default function POS() {
   const rate = Number(business.tax_rate) || 0;
   const tax = Math.round((sub - disc) * rate) / 100;
   const total = sub - disc + tax;
+  const isSplit = method === '__split';
   const isCash = method.toLowerCase() === 'cash';
   const isCredit = method.toLowerCase() === 'credit';
+  const parts = isSplit ? split.shown.map((m) => ({ method: m, amount: Math.round((Number(split.vals[m]) || 0) * 100) / 100 })).filter((x) => x.amount > 0) : [];
+  const partSum = parts.reduce((a, x) => a + x.amount, 0);
+  const cashPart = parts.find((x) => x.method.toLowerCase() === 'cash')?.amount || 0;
+  const splitLeft = Math.round((total - partSum) * 100) / 100;          // still to pay (below 0: change)
+  // typing one amount fills the next empty (or auto-filled) one with what is left
+  function typeSplit(m, v) {
+    if (!/^\d*\.?\d{0,2}$/.test(v)) return;
+    const vals = { ...split.vals, [m]: v };
+    let auto = split.auto === m ? '' : split.auto;
+    const other = split.shown.find((x) => x !== m && (vals[x] === undefined || vals[x] === '' || x === auto));
+    if (other) {
+      const manual = split.shown.filter((x) => x !== other).reduce((a, x) => a + (Number(vals[x]) || 0), 0);
+      const rest = Math.round((total - manual) * 100) / 100;
+      vals[other] = rest > 0 ? String(rest) : '';
+      auto = other;
+    }
+    setSplit({ ...split, vals, auto });
+  }
   const paidNum = isCredit ? Math.min(Number(paid) || 0, total) : isCash ? Number(paid) || 0 : total;
   const change = isCash ? Math.max(0, paidNum - total) : 0;
 
@@ -189,13 +211,17 @@ export default function POS() {
     if (!items.length) return setErr('Cart is empty');
     if (!branchId) return setErr('No branch assigned. Ask the owner to assign you to a branch.');
     if (isCash && paid !== '' && paidNum < total) return setErr('Amount paid is less than the total');
+    if (isSplit) {
+      if (parts.length < 2) return setErr('Type the amount for at least two ways of paying, or pick one way above');
+      if (partSum + 0.005 < total) return setErr(`The parts add up to ${money(partSum, cur)}. ${money(total - partSum, cur)} is still to pay.`);
+      if (partSum - total > 0.005 && partSum - total > cashPart) return setErr('Only the cash part can be more than the total (to give change)');
+    }
     const offlineNow = !navigator.onLine;
     if (isCredit) {
       if (!customer) return setErr('Choose who is taking this on credit');
       if (offlineNow) return setErr('Credit sales need a connection. Use another payment method, or wait for the network.');
-    } else if (offlineNow && !isCash && ref.trim().length < 6) {
-      return setErr(`No internet: type the ${method} code from the customer's message so it can be checked later`);
     }
+    // the M-Pesa code is optional (a busy till cannot always wait for it); when typed it is kept with the sale
     setBusy(true);
     setErr('');
     const sale = {
@@ -203,16 +229,17 @@ export default function POS() {
       user_id: session?.user?.id,
       branch_id: branchId,
       items: items.map((c) => ({ id: c.id, name: c.name, qty: c.qty, price: c.price, unit: c.unit })),
-      method,
-      paid: isCredit ? paidNum : isCash && paid === '' ? total : paidNum,
+      method: isSplit ? 'Split' : method,
+      payments: isSplit ? parts : null,
+      paid: isSplit ? partSum : isCredit ? paidNum : isCash && paid === '' ? total : paidNum,
       discount: disc,
-      note: !isCash && !isCredit && ref.trim() ? `${method} code ${ref.trim().slice(0, 40)}` : '',
+      note: !isCash && !isCredit && ref.trim() ? `${isSplit ? parts.filter((x) => x.method.toLowerCase() !== 'cash').map((x) => x.method).join(' / ') : method} code ${ref.trim().slice(0, 40)}` : '',
       customer_id: customer?.id || null,
       total,
       at: new Date().toISOString(),
       status: 'queued',
     };
-    const finish = () => { setCart([]); setDiscount(''); setPaid(''); setQ(''); setRef(''); setCustomer(null); };
+    const finish = () => { setCart([]); setDiscount(''); setPaid(''); setQ(''); setRef(''); setCustomer(null); setSplit((x) => ({ ...x, vals: {}, auto: '' })); };
 
     // keep it on the phone: no signal, or the request failed on the way
     const keep = async () => {
@@ -233,12 +260,13 @@ export default function POS() {
     const args = {
       p_branch: branchId,
       p_items: items.map((c) => ({ product_id: c.id, qty: c.qty })),
-      p_payment: method,
+      p_payment: sale.method,
       p_paid: sale.paid,
       p_discount: disc,
       p_note: sale.note,
       p_client_id: sale.id,
       p_customer: sale.customer_id,
+      ...(sale.payments ? { p_payments: sale.payments } : {}),   // only sent for a split, so the till works before patch 15
     };
     // one trip: record the sale and get its receipt number back together (create_sale_fast).
     // Falls back to the old two-step way if the database patch has not been run yet.
@@ -251,6 +279,7 @@ export default function POS() {
     if (error) {
       if (isNetwork(error, status) || status === 401) { sale.offlineTried = true; return keep(); }   // the sale may or may not have arrived; the id makes a re-send safe
       setBusy(false);
+      if (sale.payments && (error.code === 'PGRST202' || /p_payments/.test(error.message || ''))) return setErr('Split payments are not switched on yet: the owner needs to run security-patch-15.sql in Supabase.');
       return setErr(error.message);
     }
     const id = row?.id;
@@ -385,11 +414,37 @@ export default function POS() {
               ))}
             </div>
 
-            {methods.length > 1 && <div className="pay">
+            {(methods.length > 1 || splitMethods.length > 1) && <div className="pay">
               {methods.map((m) => (
                 <button key={m} className={`btn small ${m === method ? 'on' : ''}`} onClick={() => setMethod(m)}>{m}</button>
               ))}
+              {splitMethods.length > 1 && (
+                <button className={`btn small ${isSplit ? 'on' : ''}`} onClick={() => { setMethod('__split'); setCustomer(null); }} aria-label="Split the payment">Split</button>
+              )}
             </div>}
+            {isSplit && (
+              <div className="splitbox">
+                {split.shown.map((m) => (
+                  <label key={m} className="splitrow">
+                    <span>{m}</span>
+                    <input className="input" inputMode="decimal" value={split.vals[m] ?? ''} placeholder="0" onChange={(e) => typeSplit(m, e.target.value)}
+                      onFocus={(e) => e.target.select()} aria-label={`${m} amount`} />
+                    {split.shown.length > 2 && <button type="button" className="btn small" aria-label={`Remove ${m}`} onClick={() => { const vals = { ...split.vals }; delete vals[m]; setSplit({ ...split, vals, shown: split.shown.filter((x) => x !== m), auto: split.auto === m ? '' : split.auto }); }}>✕</button>}
+                  </label>
+                ))}
+                {split.shown.length < Math.min(4, splitMethods.length) && (
+                  <select className="input" value="" onChange={(e) => e.target.value && setSplit({ ...split, shown: [...split.shown, e.target.value] })} aria-label="Add another way of paying" style={{ minHeight: 40, fontSize: 13 }}>
+                    <option value="">+ Add another way of paying</option>
+                    {splitMethods.filter((m) => !split.shown.includes(m)).map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+                <div className={`splitsum ${splitLeft > 0.005 ? 'due' : 'ok'}`} role="status">
+                  {splitLeft > 0.005 ? <>Still to pay <b>{money(splitLeft, cur)}</b></> : splitLeft < -0.005
+                    ? (cashPart >= -splitLeft ? <>Change from cash <b>{money(-splitLeft, cur)}</b></> : <>Too much on {parts.filter((x) => x.method.toLowerCase() !== 'cash').map((x) => x.method).join(' / ')}: only cash gives change</>)
+                    : <>Fully paid</>}
+                </div>
+              </div>
+            )}
             {isCredit && (
               <div className="creditrow">
                 <button type="button" className="btn small grow" onClick={() => setPick(true)}>
@@ -401,7 +456,7 @@ export default function POS() {
               </div>
             )}
             {!online && !isCash && !isCredit && (
-              <div className="mini"><label><span>{method} code (required offline)</span>
+              <div className="mini"><label><span>{isSplit ? 'M-Pesa' : method} code (optional)</span>
                 <input className="input" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="e.g. SJK4H2L9QP" autoCapitalize="characters" /></label></div>
             )}
             <div className="mini">

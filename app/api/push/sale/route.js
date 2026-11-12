@@ -22,7 +22,7 @@ export async function POST(req) {
   if (caller.role === 'owner') return ok({ sent: 0 });            // the owner rang it up themselves
 
   const { data: sale } = await sb.from('sales')
-    .select('id,total,payment_method,receipt_no,branch_id,cashier_id,business_id')
+    .select('id,total,payment_method,payments,receipt_no,branch_id,cashier_id,business_id')
     .eq('id', b.sale_id).maybeSingle();
   if (!sale || sale.business_id !== caller.business_id || sale.cashier_id !== caller.id) return bad('Not allowed', 403);
 
@@ -36,7 +36,7 @@ export async function POST(req) {
   const { data: br } = await sb.from('branches').select('name').eq('id', sale.branch_id).maybeSingle();
   const r = await sendTo(owners.map((o) => o.id), {
     title: `Sale ${money(sale.total, biz.currency)}`,
-    body: `${caller.full_name || 'A cashier'} at ${br?.name || 'your shop'}, paid by ${sale.payment_method}. Receipt #${sale.receipt_no}.`,
+    body: `${caller.full_name || 'A cashier'} at ${br?.name || 'your shop'}, paid by ${sale.payments?.length ? sale.payments.map((p) => `${p.method} ${money(p.amount, biz.currency)}`).join(' + ') : sale.payment_method}. Receipt #${sale.receipt_no}.`,
     url: '/sales',
     tag: `sale-${sale.id}`,
   });
