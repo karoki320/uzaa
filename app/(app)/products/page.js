@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { money, UNITS } from '@/lib/util';
+import { money, num, UNITS } from '@/lib/util';
 import Modal from '@/components/Modal';
 import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
@@ -38,6 +38,32 @@ export default function Products() {
   const [costMode, setCostMode] = useState(false);   // the "fill in cost prices" list
   const [costs, setCosts] = useState({});            // typed costs in that list, by product id
   const skipCost = useRef(false);                    // "save without a cost" was pressed
+  // stock of the item being edited, per branch: { now: {branchId: qty}, val: {branchId: typed}, mode, reason, hist }
+  const [stk, setStk] = useState(null);
+  const editId = edit?.id;
+  useEffect(() => {
+    setStk(null);
+    if (!editId || !canEdit) return;
+    let off = false;
+    Promise.all([
+      supabase.from('stock').select('branch_id,qty').eq('product_id', editId),
+      supabase.from('stock_movements').select('change,reason,created_at,branch_id').eq('product_id', editId).order('created_at', { ascending: false }).limit(6),
+    ]).then(([a, b]) => {
+      if (off) return;
+      const now = {};
+      branches.forEach((br) => (now[br.id] = 0));
+      (a.data || []).forEach((x) => (now[x.branch_id] = Number(x.qty)));
+      setStk({ now, val: {}, mode: 'count', reason: 'Stock count correction', hist: b.data || [] });
+    });
+    return () => { off = true; };
+  }, [editId, canEdit, branches]);
+  // what each branch's stock changes by when the form is saved
+  const stockDelta = (bid) => {
+    if (!stk) return 0;
+    const t = String(stk.val[bid] ?? '').trim();
+    if (t === '' || isNaN(Number(t))) return 0;
+    return stk.mode === 'count' ? Math.round((Number(t) - stk.now[bid]) * 1000) / 1000 : Number(t);
+  };
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('products').select('*').order('name').range(0, 4999);
@@ -155,6 +181,16 @@ export default function Products() {
       const res = await supabase.from('products').update(payload).eq('id', edit.id).select('*').single();
       error = res.error;
       saved = res.data;
+      // stock changes typed in the table, one movement per branch, with the chosen reason
+      if (!error && payload.track_stock && stk) {
+        for (const br of branches) {
+          const d = stockDelta(br.id);
+          if (!d) continue;
+          if (stk.now[br.id] + d < 0) { error = { message: `${br.name}: stock cannot go below 0` }; break; }
+          const r2 = await supabase.rpc('adjust_stock', { p_product: edit.id, p_branch: br.id, p_change: d, p_reason: stk.reason });
+          if (r2.error) { error = r2.error; break; }
+        }
+      }
     } else {
       const res = await supabase.from('products').insert({ ...payload, business_id: business.id }).select('*').single();
       error = res.error;
@@ -173,6 +209,49 @@ export default function Products() {
     else load();
   }
 
+  // ---- select several items: long-press one (or press Select), then tap others; hide, show or delete them together
+  const [picked, setPicked] = useState(null);        // null = not selecting, else a Set of ids
+  const [confirmDel, setConfirmDel] = useState(false);
+  const press = useRef(null);
+  const selecting = !!picked && canEdit;
+  const pick = (id) => setPicked((cur) => { const n = new Set(cur || []); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const holdStart = (id) => (e) => {
+    if (!canEdit || costMode || e.button > 0) return;
+    const at = { x: e.clientX, y: e.clientY };
+    press.current = { id, at, fired: false, t: setTimeout(() => {
+      press.current.fired = true;
+      try { navigator.vibrate?.(30); } catch {}
+      setPicked((cur) => { const n = new Set(cur || []); n.add(id); return n; });
+    }, 480) };
+  };
+  const holdMove = (e) => {
+    const h = press.current;
+    if (h && !h.fired && (Math.abs(e.clientX - h.at.x) > 10 || Math.abs(e.clientY - h.at.y) > 10)) { clearTimeout(h.t); press.current = null; }   // scrolling, not holding
+  };
+  const holdEnd = () => { const h = press.current; if (h) clearTimeout(h.t); };
+  const rowTap = (p) => (e) => {
+    const h = press.current;
+    press.current = null;
+    if (h?.fired) return;                       // the long press itself already selected it
+    if (selecting && !e.target.closest('button, input, a')) pick(p.id);
+  };
+  const ids = picked ? [...picked] : [];
+  async function bulkActive(active) {
+    setRows((list) => list.map((r) => (picked.has(r.id) ? { ...r, active } : r)));
+    const { error } = await supabase.from('products').update({ active }).in('id', ids);
+    if (error) { setErr(error.message); load(); }
+    setPicked(null);
+  }
+  async function bulkDelete() {
+    setBusy(true); setErr('');
+    const { error } = await supabase.from('products').delete().in('id', ids);
+    setBusy(false);
+    setConfirmDel(false);
+    if (error) return setErr(error.message);
+    setRows((list) => list.filter((r) => !picked.has(r.id)));
+    setPicked(null);
+  }
+
   async function toggle(p) {
     setRows((list) => list.map((r) => (r.id === p.id ? { ...r, active: !p.active } : r)));   // show it at once
     const { error } = await supabase.from('products').update({ active: !p.active }).eq('id', p.id);
@@ -189,6 +268,7 @@ export default function Products() {
         <h1 style={{ margin: 0 }}>{label}s</h1>
         <div className="row" style={{ gap: 8 }}>
           {barcodeOn && <button className="btn" onClick={() => setScan('find')}>Scan</button>}
+          {canEdit && !selecting && rows.length > 0 && <button className="btn" onClick={() => setPicked(new Set())}>Select</button>}
           {canAdd && <button className="btn primary" onClick={() => { skipCost.current = false; setEdit({ ...blank }); }}>+ Add</button>}
         </div>
       </div>
@@ -219,8 +299,15 @@ export default function Products() {
           const price = Number(p.price), cost = Number(p.cost);
           const margin = price > 0 && cost > 0 ? Math.round(((price - cost) / price) * 100) : null;
           return (
-            <div className="lrow" key={p.id} style={{ opacity: p.active ? 1 : 0.6, flexWrap: costMode ? 'wrap' : 'nowrap' }}>
-              <span className="rank" style={{ background: toneFor(p.category || p.name) }}>{initialsOf(p.name)}</span>
+            <div className={`lrow ${canEdit && !costMode ? 'hold' : ''} ${selecting && picked.has(p.id) ? 'picked' : ''}`} key={p.id}
+              style={{ opacity: p.active ? 1 : 0.6, flexWrap: costMode ? 'wrap' : 'nowrap', cursor: selecting ? 'pointer' : undefined }}
+              onPointerDown={holdStart(p.id)} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerLeave={holdEnd} onPointerCancel={holdEnd}
+              onClick={rowTap(p)} onContextMenu={(e) => { if (canEdit) e.preventDefault(); }}
+              aria-selected={selecting ? picked.has(p.id) : undefined}>
+              {selecting
+                ? <span className={`rank tick ${picked.has(p.id) ? 'on' : ''}`} role="checkbox" aria-checked={picked.has(p.id)} aria-label={`Select ${p.name}`} tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); pick(p.id); } }}>{picked.has(p.id) ? '✓' : ''}</span>
+                : <span className="rank" style={{ background: toneFor(p.category || p.name) }}>{initialsOf(p.name)}</span>}
               <span className="grow2">
                 <b style={{ fontSize: 14 }}>{p.name}{!p.active && <span className="badge red" style={{ marginLeft: 6, fontSize: 11 }}>Hidden</span>}</b>
                 <span>{[p.category, barcodeOn && p.barcode].filter(Boolean).join(' · ') || 'No category'}</span>
@@ -232,7 +319,7 @@ export default function Products() {
                   <input className="input" inputMode="decimal" placeholder={`What you paid (${business.currency})`} value={costs[p.id] ?? ''} onChange={(e) => setCosts({ ...costs, [p.id]: e.target.value })} onBlur={() => saveCost(p)} onKeyDown={(e) => { if (e.key === 'Enter') saveCost(p); }} aria-label={`Cost price for ${p.name}`} style={{ minHeight: 44 }} />
                   <button className="btn small primary" onClick={() => saveCost(p)} disabled={!(Number(costs[p.id]) > 0)}>Save</button>
                 </span>
-              ) : canEdit && (
+              ) : canEdit && !selecting && (
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <button className="btn small" onClick={() => { skipCost.current = false; setEdit({ ...p, price: p.price, cost: p.cost, custom: p.custom || {}, opening: '' }); }}>Edit</button>
                   <button className="btn small" onClick={() => toggle(p)}>{p.active ? 'Hide' : 'Show'}</button>
@@ -248,6 +335,32 @@ export default function Products() {
           </div>
         )}
       </div>
+
+      {selecting && (
+        <div className="selbar no-print" role="toolbar" aria-label="Selected items">
+          <b style={{ whiteSpace: 'nowrap' }}>{ids.length} selected</b>
+          <button className="btn small" onClick={() => setPicked(ids.length === shown.length ? new Set() : new Set(shown.map((p) => p.id)))}>{ids.length === shown.length && shown.length ? 'None' : 'All'}</button>
+          <span style={{ flex: 1 }} />
+          <button className="btn small" disabled={!ids.length} onClick={() => bulkActive(false)}>Hide</button>
+          <button className="btn small" disabled={!ids.length} onClick={() => bulkActive(true)}>Show</button>
+          <button className="btn small danger" disabled={!ids.length} onClick={() => setConfirmDel(true)}>Delete</button>
+          <button className="btn small" aria-label="Stop selecting" onClick={() => setPicked(null)}>✕</button>
+        </div>
+      )}
+      {confirmDel && (
+        <Modal title={`Delete ${ids.length} ${ids.length === 1 ? label.toLowerCase() : `${label.toLowerCase()}s`}?`} onClose={() => setConfirmDel(false)}>
+          <p style={{ marginTop: 0 }}>{rows.filter((r) => picked.has(r.id)).slice(0, 5).map((r) => r.name).join(', ')}{ids.length > 5 ? ` and ${ids.length - 5} more` : ''}.</p>
+          <div className="alert" style={{ marginBottom: 14 }}>
+            <span>This cannot be undone. Their stock and stock history are removed. Past sales and receipts keep the item names.
+              If you might sell them again, <b>Hide</b> them instead.</span>
+          </div>
+          {err && <div className="err">{err}</div>}
+          <div className="row">
+            <button className="btn danger grow" disabled={busy} onClick={bulkDelete}>{busy ? 'Deleting...' : 'Yes, delete'}</button>
+            <button className="btn grow" disabled={busy} onClick={() => { setConfirmDel(false); bulkActive(false); }}>Hide them instead</button>
+          </div>
+        </Modal>
+      )}
 
       {edit && (
         <Modal title={edit.id ? `Edit ${label.toLowerCase()}` : `Add ${label.toLowerCase()}`} onClose={() => setEdit(null)}>
@@ -317,6 +430,68 @@ export default function Products() {
                 <label className="field grow"><span>Low stock warning at</span><input className="input" inputMode="decimal" value={edit.low_stock_level} onChange={set('low_stock_level')} /></label>
                 {!edit.id && (
                   <label className="field grow"><span>Opening stock</span><input className="input" inputMode="decimal" value={edit.opening} onChange={set('opening')} /></label>
+                )}
+              </div>
+            )}
+            {edit.id && edit.track_stock && canEdit && (
+              <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+                <div className="card-head" style={{ marginBottom: 8 }}><h3>Stock</h3>
+                  {stk && (
+                    <div className="segs" role="tablist" aria-label="How to enter stock" style={{ margin: 0, padding: 3 }}>
+                      {[['count', 'New count'], ['change', 'Add / remove']].map(([k, l]) => (
+                        <button type="button" key={k} role="tab" aria-selected={stk.mode === k} className={stk.mode === k ? 'on' : ''} style={{ minHeight: 34, padding: '0 10px', fontSize: 12 }}
+                          onClick={() => setStk({ ...stk, mode: k, val: {}, reason: k === 'count' ? 'Stock count correction' : 'Received stock' })}>{l}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {!stk ? <p className="muted small" style={{ margin: 0 }}>Loading stock...</p> : (
+                  <>
+                    <div className="table-wrap">
+                      <table>
+                        <thead><tr><th>Branch</th><th className="num">In stock</th><th className="num">{stk.mode === 'count' ? 'Counted' : 'Add (+) / remove (-)'}</th><th className="num">After</th></tr></thead>
+                        <tbody>
+                          {branches.map((br) => {
+                            const d = stockDelta(br.id);
+                            const after = Math.round((stk.now[br.id] + d) * 1000) / 1000;
+                            return (
+                              <tr key={br.id}>
+                                <td>{br.name}</td>
+                                <td className="num">{num(stk.now[br.id])}{edit.unit && edit.unit !== 'pc' ? ` ${edit.unit}` : ''}</td>
+                                <td className="num">
+                                  <input className="input" inputMode="decimal" value={stk.val[br.id] ?? ''} onChange={(e) => setStk({ ...stk, val: { ...stk.val, [br.id]: e.target.value } })}
+                                    placeholder={stk.mode === 'count' ? num(stk.now[br.id]) : '+0'} aria-label={`${stk.mode === 'count' ? 'Counted stock' : 'Stock change'} at ${br.name}`}
+                                    style={{ width: 96, minHeight: 40, textAlign: 'right', marginLeft: 'auto' }} />
+                                </td>
+                                <td className="num" style={{ fontWeight: d ? 800 : 400, color: after < 0 ? 'var(--error)' : undefined }}>
+                                  {num(after)}{d ? <div className="small" style={{ color: d > 0 ? '#0A4F74' : '#7A2A00' }}>{d > 0 ? '+' : ''}{num(d)}</div> : null}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {branches.some((br) => stockDelta(br.id)) && (
+                      <label className="field" style={{ margin: '10px 0 0' }}><span>Reason</span>
+                        <select className="input" value={stk.reason} onChange={(e) => setStk({ ...stk, reason: e.target.value })}>
+                          {['Stock count correction', 'Received stock', 'Returned by customer', 'Damaged or expired', 'Returned to supplier', 'Used in the shop', 'Other'].map((r) => <option key={r}>{r}</option>)}
+                        </select>
+                      </label>
+                    )}
+                    {stk.hist.length > 0 && (
+                      <details style={{ marginTop: 10 }}>
+                        <summary className="small" style={{ cursor: 'pointer', fontWeight: 700 }}>Recent changes</summary>
+                        {stk.hist.map((h, i) => (
+                          <div key={i} className="row between small" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                            <span>{h.reason}{branches.length > 1 ? ` · ${branches.find((b) => b.id === h.branch_id)?.name || ''}` : ''}<br /><span className="muted">{new Date(h.created_at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })}</span></span>
+                            <b style={{ color: Number(h.change) > 0 ? '#0A4F74' : '#7A2A00' }}>{Number(h.change) > 0 ? '+' : ''}{num(h.change)}</b>
+                          </div>
+                        ))}
+                      </details>
+                    )}
+                    <p className="small muted" style={{ margin: '8px 0 0' }}>Leave a box empty to keep that branch's stock as it is. The change is saved with the item.</p>
+                  </>
                 )}
               </div>
             )}
