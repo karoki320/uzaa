@@ -18,7 +18,10 @@ const toneFor = (k) => { let h = 0; for (const ch of String(k || '')) h = (h * 3
 const initialsOf = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 // only what the till needs: no cost prices, no timestamps (smaller download on every refresh)
-const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active';
+const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of';
+const OLD_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active';   // before patch 16
+// bulk price: from bulk_min (for example 50 ml) the whole line is charged at bulk_price
+const unitPrice = (c) => (Number(c.bmin) > 0 && c.bprice != null && c.qty >= Number(c.bmin) ? Number(c.bprice) : c.price);
 
 export default function POS() {
   const { profile, business, branches, session } = useAuth();
@@ -73,7 +76,8 @@ export default function POS() {
     const saved = await getKv('products');
     if (saved) { setProducts((cur) => (cur.length ? cur : saved)); setFromCopy(true); }
     if (!navigator.onLine) return;
-    const { data, error } = await supabase.from('products').select(TILL_COLS).eq('active', true).order('name').range(0, 4999);
+    let { data, error } = await supabase.from('products').select(TILL_COLS).eq('active', true).order('name').range(0, 4999);
+    if (error && error.code === '42703') ({ data, error } = await supabase.from('products').select(OLD_COLS).eq('active', true).order('name').range(0, 4999));
     if (!error && data) { setProducts(data); setFromCopy(false); saveKv('products', data.map(strip)); }
   }, []);
   useEffect(() => { loadProducts(); }, [loadProducts]);
@@ -99,6 +103,14 @@ export default function POS() {
     window.addEventListener('uzaa-synced', f);
     return () => window.removeEventListener('uzaa-synced', f);
   }, [loadProducts, loadStock]);
+
+  // an item can sell from another item's stock (a wholesale oil uses the retail oil's ml)
+  const byId = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  const stockRef = (p) => {
+    const par = p.stock_of && byId[p.stock_of];
+    return par ? { id: par.id, track: !!par.track_stock, low: par.low_stock_level } : { id: p.id, track: !!p.track_stock, low: p.low_stock_level };
+  };
+  const priced = useMemo(() => cart.map((c) => ({ ...c, base: c.price, price: unitPrice(c) })), [cart]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -127,7 +139,9 @@ export default function POS() {
       const i = c.findIndex((x) => x.id === p.id);
       if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: Math.round((x.qty + stepFor(x.unit)) * 1000) / 1000, qs: undefined } : x));
       const unit = p.unit || 'pc';
-      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: stepFor(unit) === 1 ? 1 : 1, unit, track: p.track_stock }];
+      const sr = stockRef(p);
+      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: stepFor(unit) === 1 ? 1 : 1, unit, track: sr.track, sid: sr.id,
+        bmin: p.bulk_min != null ? Number(p.bulk_min) : null, bprice: p.bulk_price != null ? Number(p.bulk_price) : null }];
     });
     setErr('');
   }
@@ -157,8 +171,9 @@ export default function POS() {
     }
     add(p);
     const qty = Math.round(((inCart?.qty || 0) + step) * 1000) / 1000;
-    const have = stock[p.id] ?? 0;
-    const low = p.track_stock && have < qty ? `. Only ${num(have)} in stock` : '';
+    const sr = stockRef(p);
+    const have = stock[sr.id] ?? 0;
+    const low = sr.track && have < qty ? `. Only ${num(have)} in stock` : '';
     return { ok: !low, text: `${p.name} ${money(p.price, cur)}${qty > 1 ? ` (x${num(qty)})` : ''}${low}` };
   }
 
@@ -170,7 +185,7 @@ export default function POS() {
     setCart((c) => c.map((x) => (x.id === id ? { ...x, qs: v, qty: Number(v) || 0 } : x)));
   };
 
-  const sub = cart.reduce((s, c) => s + c.qty * c.price, 0);
+  const sub = priced.reduce((s, c) => s + c.qty * c.price, 0);
   const disc = Math.min(Number(discount) || 0, sub);
   const rate = Number(business.tax_rate) || 0;
   const tax = Math.round((sub - disc) * rate) / 100;
@@ -207,7 +222,7 @@ export default function POS() {
   }, [isCredit]); // eslint-disable-line
 
   async function charge(withPrint) {
-    const items = cart.filter((c) => c.qty > 0);
+    const items = priced.filter((c) => c.qty > 0);
     if (!items.length) return setErr('Cart is empty');
     if (!branchId) return setErr('No branch assigned. Ask the owner to assign you to a branch.');
     if (isCash && paid !== '' && paidNum < total) return setErr('Amount paid is less than the total');
@@ -247,7 +262,7 @@ export default function POS() {
       try { await queueSale(sale); } catch { setBusy(false); return setErr('Could not save on this phone. Free some storage and try again.'); }
       setStock((m) => {
         const n = { ...m };
-        items.forEach((c) => { if (c.track) n[c.id] = Math.round(((n[c.id] ?? 0) - c.qty) * 1000) / 1000; });
+        items.forEach((c) => { const k = c.sid || c.id; if (c.track) n[k] = Math.round(((n[k] ?? 0) - c.qty) * 1000) / 1000; });
         saveKv(`stock:${branchId}`, n);
         return n;
       });
@@ -288,7 +303,7 @@ export default function POS() {
     // server in the background (the till no longer waits for these before the next sale)
     setStock((m) => {
       const n = { ...m };
-      items.forEach((c) => { if (c.track) n[c.id] = Math.round(((n[c.id] ?? 0) - c.qty) * 1000) / 1000; });
+      items.forEach((c) => { const k = c.sid || c.id; if (c.track) n[k] = Math.round(((n[k] ?? 0) - c.qty) * 1000) / 1000; });
       saveKv(`stock:${branchId}`, n);
       return n;
     });
@@ -358,13 +373,14 @@ export default function POS() {
         )}
         <div className="tiles">
           {filtered.map((p) => {
-            const s = stock[p.id] ?? 0;
+            const sr = stockRef(p);
+            const s = stock[sr.id] ?? 0;
             return (
               <button key={p.id} className="tile" onClick={() => add(p)}>
                 <span className="av" style={{ background: toneFor(p.category || p.name) }} aria-hidden="true">{initialsOf(p.name)}</span>
                 <b>{p.name}</b>
                 <span className="p">{money(p.price, cur)}{p.unit && p.unit !== 'pc' ? <span className="s"> / {p.unit}</span> : null}</span>
-                {p.track_stock && <span className={`stk ${s <= 0 ? 'out' : s <= Number(p.low_stock_level) ? 'low' : ''}`}>{s <= 0 ? 'Out' : `${num(s)}${lbl(p.unit)} left`}</span>}
+                {sr.track && <span className={`stk ${s <= 0 ? 'out' : s <= Number(sr.low) ? 'low' : ''}`}>{s <= 0 ? 'Out' : `${num(s)}${lbl(p.unit)} left`}</span>}
               </button>
             );
           })}
@@ -397,12 +413,14 @@ export default function POS() {
         {cart.length > 0 && (
           <>
             <div className="cart-lines">
-              {cart.map((c) => (
+              {priced.map((c) => (
                 <div key={c.id} className="cart-line">
                   <div className="nm">
                     <b>{c.name}</b>
-                    <div className="small muted">{money(c.price, cur)} per {c.unit && c.unit !== 'pc' ? c.unit : 'item'}</div>
-                    {c.track && (stock[c.id] ?? 0) < c.qty && <div className="small warn">Only {num(stock[c.id] ?? 0)}{lbl(c.unit)} in stock</div>}
+                    <div className="small muted">{money(c.price, cur)} per {c.unit && c.unit !== 'pc' ? c.unit : 'item'}
+                      {c.price !== c.base ? <span className="ok"> (bulk price from {num(c.bmin)}{lbl(c.unit)})</span>
+                        : Number(c.bmin) > 0 && c.bprice != null ? <span> ({money(c.bprice, cur)} from {num(c.bmin)}{lbl(c.unit)})</span> : null}</div>
+                    {c.track && (stock[c.sid || c.id] ?? 0) < c.qty && <div className="small warn">Only {num(stock[c.sid || c.id] ?? 0)}{lbl(c.unit)} in stock</div>}
                   </div>
                   <div className="qty">
                     <button onClick={() => setQty(c.id, -1)} aria-label="Less">-</button>

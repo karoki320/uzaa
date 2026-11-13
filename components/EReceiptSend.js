@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { post } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { money, fmtDate, waLink } from '@/lib/util';
 import { ereceiptMessage } from '@/lib/ereceipt-text';
 import Modal from './Modal';
@@ -15,6 +16,7 @@ export default function EReceiptSend({ business, sale, phone: phone0 = '', name:
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState(false);
   const [sent, setSent] = useState(false);
+  const [items, setItems] = useState(null);   // the breakdown of what was bought, for the message
 
   useEffect(() => {
     let dead = false;
@@ -22,12 +24,14 @@ export default function EReceiptSend({ business, sale, phone: phone0 = '', name:
       if (dead) return;
       r.ok ? setLink(r.data.url) : setErr(r.data.error || 'Could not prepare the e-receipt link');
     });
+    supabase.from('sale_items').select('name,qty,price,unit').eq('sale_id', sale.id)
+      .then(({ data }) => { if (!dead) setItems(data || []); }, () => { if (!dead) setItems([]); });
     return () => { dead = true; };
   }, [sale.id]);
 
-  const msg = link ? ereceiptMessage(business, {
+  const msg = link && items ? ereceiptMessage(business, {
     customer: name, receipt: sale.receipt_no, total: money(sale.total, business.currency),
-    date: sale.created_at ? fmtDate(sale.created_at) : '', link,
+    date: sale.created_at ? fmtDate(sale.created_at) : '', link, items,
   }) : '';
   const wa = msg ? waLink(phone, msg) : '';
   const typed = phone.replace(/\D/g, '').length >= 9;

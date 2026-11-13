@@ -175,6 +175,13 @@ export default function Products() {
       low_stock_level: Number(edit.low_stock_level) || 0,
       custom: edit.custom || {},
     };
+    // bulk price and shared stock (only once the database has the columns: security-patch-16.sql)
+    if (hasNew) {
+      const bm = Number(edit.bulk_min) || 0, bp = edit.bulk_price === '' || edit.bulk_price == null ? null : Number(edit.bulk_price);
+      payload.bulk_min = bm > 0 && bp != null && bp >= 0 ? bm : null;
+      payload.bulk_price = payload.bulk_min ? bp : null;
+      payload.stock_of = !payload.track_stock && edit.stock_of && edit.stock_of !== edit.id ? edit.stock_of : null;
+    }
     let error;
     let saved = null;
     if (edit.id) {
@@ -258,6 +265,8 @@ export default function Products() {
     if (error) load();
   }
 
+  const hasNew = rows.length > 0 && 'bulk_min' in rows[0];
+  const stockSources = useMemo(() => rows.filter((r) => r.track_stock && r.active !== false), [rows]);
   const unitName = edit?.unit || 'unit';
   const set = (k) => (e) => setEdit({ ...edit, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const setCustom = (k) => (e) => setEdit({ ...edit, custom: { ...edit.custom, [k]: e.target.value } });
@@ -411,6 +420,14 @@ export default function Products() {
             {Number(edit.price) > 0 && Number(edit.cost) > 0 && (
               <p className="small" style={{ marginTop: -6 }}>You make <b>{money(Number(edit.price) - Number(edit.cost), business.currency)}</b> on each one ({Math.round(((Number(edit.price) - Number(edit.cost)) / Number(edit.price)) * 100)}% margin).</p>
             )}
+            {hasNew && (
+              <div className="row">
+                <label className="field grow"><span>Bulk price (per {unitName}, optional)</span>
+                  <input className="input" inputMode="decimal" value={edit.bulk_price ?? ''} onChange={set('bulk_price')} placeholder="e.g. 9" /></label>
+                <label className="field grow"><span>Bulk price applies from</span>
+                  <input className="input" inputMode="decimal" value={edit.bulk_min ?? ''} onChange={set('bulk_min')} placeholder={`e.g. 50 ${unitName}`} /></label>
+              </div>
+            )}
             {edit.askCost && (
               <div className="alert" style={{ marginBottom: 14 }}>
                 <span><b>What did you pay for it?</b> Without the cost price, Uzaa counts the whole selling price as profit.</span>
@@ -425,6 +442,15 @@ export default function Products() {
             <label className="row" style={{ marginBottom: 14 }}>
               <input type="checkbox" checked={!!edit.track_stock} onChange={set('track_stock')} /> Track stock for this {label.toLowerCase()}
             </label>
+            {hasNew && !edit.track_stock && (
+              <label className="field"><span>Sell from the stock of (optional)</span>
+                <select className="input" value={edit.stock_of || ''} onChange={set('stock_of')}>
+                  <option value="">Nothing: this {label.toLowerCase()} has no stock count</option>
+                  {stockSources.filter((r) => r.id !== edit.id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+                <span className="small muted">For example a wholesale oil that is poured from the same bottle as the retail one.</span>
+              </label>
+            )}
             {edit.track_stock && (
               <div className="row">
                 <label className="field grow"><span>Low stock warning at</span><input className="input" inputMode="decimal" value={edit.low_stock_level} onChange={set('low_stock_level')} /></label>

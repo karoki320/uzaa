@@ -33,6 +33,7 @@ function EReceiptCard({ f, setF, set }) {
   const [logoErr, setLogoErr] = useState('');
   const sample = ereceiptMessage({ ...f, ereceipt_message: f.ereceipt_message }, {
     customer: 'Wanjiku', receipt: 1024, total: money(1250, f.currency), date: 'today', link: 'https://uzaa.co.ke/r/...',
+    items: [{ name: 'Kenya Love', qty: 30, price: 33.33, unit: 'ml' }, { name: 'Bubble Gum', qty: 10, price: 25, unit: 'ml' }],
   });
   const numBad = f.ereceipt_whatsapp.trim() && !waLink(f.ereceipt_whatsapp);
   const linkBad = f.ereceipt_link_url.trim() && !urlOk(f.ereceipt_link_url);
