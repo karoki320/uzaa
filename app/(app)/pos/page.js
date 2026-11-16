@@ -18,7 +18,8 @@ const toneFor = (k) => { let h = 0; for (const ch of String(k || '')) h = (h * 3
 const initialsOf = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 // only what the till needs: no cost prices, no timestamps (smaller download on every refresh)
-const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of';
+const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of,sell_without_stock';
+const COLS_16 = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of';   // before patch 17
 const OLD_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active';   // before patch 16
 // bulk price: from bulk_min (for example 50 ml) the whole line is charged at bulk_price
 const unitPrice = (c) => (Number(c.bmin) > 0 && c.bprice != null && c.qty >= Number(c.bmin) ? Number(c.bprice) : c.price);
@@ -77,6 +78,7 @@ export default function POS() {
     if (saved) { setProducts((cur) => (cur.length ? cur : saved)); setFromCopy(true); }
     if (!navigator.onLine) return;
     let { data, error } = await supabase.from('products').select(TILL_COLS).eq('active', true).order('name').range(0, 4999);
+    if (error && error.code === '42703') ({ data, error } = await supabase.from('products').select(COLS_16).eq('active', true).order('name').range(0, 4999));
     if (error && error.code === '42703') ({ data, error } = await supabase.from('products').select(OLD_COLS).eq('active', true).order('name').range(0, 4999));
     if (!error && data) { setProducts(data); setFromCopy(false); saveKv('products', data.map(strip)); }
   }, []);
@@ -108,8 +110,17 @@ export default function POS() {
   const byId = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
   const stockRef = (p) => {
     const par = p.stock_of && byId[p.stock_of];
-    return par ? { id: par.id, track: !!par.track_stock, low: par.low_stock_level } : { id: p.id, track: !!p.track_stock, low: p.low_stock_level };
+    // allow: this item (or the item it pours from) may be sold when its stock is used up
+    return par ? { id: par.id, track: !!par.track_stock, low: par.low_stock_level, allow: !!(p.sell_without_stock || par.sell_without_stock) }
+      : { id: p.id, track: !!p.track_stock, low: p.low_stock_level, allow: !!p.sell_without_stock };
   };
+  // how much more of a stock count this sale may still take (Infinity when the item may be sold without stock)
+  const roomFor = (sr, list, exceptId) => {
+    if (!sr.track || sr.allow) return Infinity;
+    const used = list.filter((x) => (x.sid || x.id) === sr.id && x.id !== exceptId).reduce((a, x) => a + x.qty, 0);
+    return Math.round(((stock[sr.id] ?? 0) - used) * 1000) / 1000;
+  };
+  const outMsg = (name, left, unit) => (left <= 0 ? `${name} is out of stock` : `Only ${num(left)}${unit && unit !== 'pc' ? ` ${unit}` : ''} of ${name} left`);
   const priced = useMemo(() => cart.map((c) => ({ ...c, base: c.price, price: unitPrice(c) })), [cart]);
 
   const filtered = useMemo(() => {
@@ -135,15 +146,22 @@ export default function POS() {
   }, []);
 
   function add(p) {
+    // stop at zero unless the owner allowed this item to sell without stock
+    const sr = stockRef(p);
+    const step = stepFor(p.unit || 'pc');
+    const inSale = cartNow.current;
+    const mine = inSale.find((x) => x.id === p.id)?.qty || 0;
+    const room = roomFor(sr, inSale, p.id);
+    if (mine + step > room + 1e-9) { setErr(outMsg(p.name, room, p.unit)); return false; }
     setCart((c) => {
       const i = c.findIndex((x) => x.id === p.id);
       if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: Math.round((x.qty + stepFor(x.unit)) * 1000) / 1000, qs: undefined } : x));
       const unit = p.unit || 'pc';
-      const sr = stockRef(p);
-      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: stepFor(unit) === 1 ? 1 : 1, unit, track: sr.track, sid: sr.id,
+      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: stepFor(unit) === 1 ? 1 : 1, unit, track: sr.track, sid: sr.id, allow: sr.allow,
         bmin: p.bulk_min != null ? Number(p.bulk_min) : null, bprice: p.bulk_price != null ? Number(p.bulk_price) : null }];
     });
     setErr('');
+    return true;
   }
 
   function onSearchKey(e) {
@@ -169,19 +187,32 @@ export default function POS() {
       const left = Math.max(0, Math.round((inCart.qty - step) * 1000) / 1000);
       return { ok: true, text: left > 0 ? `Took off ${p.name} (${num(left)} left in sale)` : `Removed ${p.name} from the sale` };
     }
-    add(p);
-    const qty = Math.round(((inCart?.qty || 0) + step) * 1000) / 1000;
     const sr = stockRef(p);
+    if (!add(p)) return { ok: false, text: outMsg(p.name, roomFor(sr, cartNow.current, p.id), p.unit) };
+    const qty = Math.round(((inCart?.qty || 0) + step) * 1000) / 1000;
     const have = stock[sr.id] ?? 0;
     const low = sr.track && have < qty ? `. Only ${num(have)} in stock` : '';
     return { ok: !low, text: `${p.name} ${money(p.price, cur)}${qty > 1 ? ` (x${num(qty)})` : ''}${low}` };
   }
 
-  const setQty = (id, dir) =>
+  const setQty = (id, dir) => {
+    const it = cartNow.current.find((x) => x.id === id);
+    if (dir > 0 && it) {
+      const room = roomFor({ id: it.sid || it.id, track: it.track, allow: it.allow }, cartNow.current, id);
+      if (it.qty + stepFor(it.unit) > room + 1e-9) return setErr(outMsg(it.name, room, it.unit));
+    }
+    setErr('');
     setCart((c) => c.map((x) => (x.id === id ? { ...x, qty: Math.max(0, Math.round((x.qty + dir * stepFor(x.unit)) * 1000) / 1000), qs: undefined } : x)).filter((x) => x.qty > 0));
+  };
   // keeps what is typed as text so "0." and "0.5" can be entered
   const typeQty = (id, v) => {
     if (!/^\d*\.?\d{0,3}$/.test(v)) return;
+    const it = cartNow.current.find((x) => x.id === id);
+    if (it) {
+      const room = roomFor({ id: it.sid || it.id, track: it.track, allow: it.allow }, cartNow.current, id);
+      if ((Number(v) || 0) > room + 1e-9) { setErr(outMsg(it.name, room, it.unit)); v = String(Math.max(0, room)); }
+      else setErr('');
+    }
     setCart((c) => c.map((x) => (x.id === id ? { ...x, qs: v, qty: Number(v) || 0 } : x)));
   };
 
@@ -224,6 +255,10 @@ export default function POS() {
   async function charge(withPrint) {
     const items = priced.filter((c) => c.qty > 0);
     if (!items.length) return setErr('Cart is empty');
+    for (const c of items) {                     // last check: never sell past zero unless allowed
+      const room = roomFor({ id: c.sid || c.id, track: c.track, allow: c.allow }, items, c.id);
+      if (c.qty > room + 1e-9) return setErr(`${outMsg(c.name, room, c.unit)}. Lower the quantity or take it off the sale.`);
+    }
     if (!branchId) return setErr('No branch assigned. Ask the owner to assign you to a branch.');
     if (isCash && paid !== '' && paidNum < total) return setErr('Amount paid is less than the total');
     if (isSplit) {
@@ -375,8 +410,9 @@ export default function POS() {
           {filtered.map((p) => {
             const sr = stockRef(p);
             const s = stock[sr.id] ?? 0;
+            const blocked = sr.track && !sr.allow && s <= 0;
             return (
-              <button key={p.id} className="tile" onClick={() => add(p)}>
+              <button key={p.id} className={`tile ${blocked ? 'off' : ''}`} onClick={() => add(p)} aria-disabled={blocked || undefined}>
                 <span className="av" style={{ background: toneFor(p.category || p.name) }} aria-hidden="true">{initialsOf(p.name)}</span>
                 <b>{p.name}</b>
                 <span className="p">{money(p.price, cur)}{p.unit && p.unit !== 'pc' ? <span className="s"> / {p.unit}</span> : null}</span>

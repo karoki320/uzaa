@@ -175,6 +175,8 @@ export default function Products() {
       low_stock_level: Number(edit.low_stock_level) || 0,
       custom: edit.custom || {},
     };
+    // stop at zero (only once the database has the column: security-patch-17.sql)
+    if (hasSws) payload.sell_without_stock = !!edit.sell_without_stock;
     // bulk price and shared stock (only once the database has the columns: security-patch-16.sql)
     if (hasNew) {
       const bm = Number(edit.bulk_min) || 0, bp = edit.bulk_price === '' || edit.bulk_price == null ? null : Number(edit.bulk_price);
@@ -243,6 +245,14 @@ export default function Products() {
     if (selecting && !e.target.closest('button, input, a')) pick(p.id);
   };
   const ids = picked ? [...picked] : [];
+  // the database has the "sell even when out of stock" setting (patch 17)
+  const hasSws = rows.some((r) => Object.prototype.hasOwnProperty.call(r, 'sell_without_stock'));
+  async function bulkSws(on) {
+    setRows((list) => list.map((r) => (picked.has(r.id) ? { ...r, sell_without_stock: on } : r)));
+    const { error } = await supabase.from('products').update({ sell_without_stock: on }).in('id', ids);
+    if (error) { setErr(error.message); load(); }
+    setPicked(null);
+  }
   async function bulkActive(active) {
     setRows((list) => list.map((r) => (picked.has(r.id) ? { ...r, active } : r)));
     const { error } = await supabase.from('products').update({ active }).in('id', ids);
@@ -319,7 +329,7 @@ export default function Products() {
                 : <span className="rank" style={{ background: toneFor(p.category || p.name) }}>{initialsOf(p.name)}</span>}
               <span className="grow2">
                 <b style={{ fontSize: 14 }}>{p.name}{!p.active && <span className="badge red" style={{ marginLeft: 6, fontSize: 11 }}>Hidden</span>}</b>
-                <span>{[p.category, barcodeOn && p.barcode].filter(Boolean).join(' · ') || 'No category'}</span>
+                <span>{[p.category, barcodeOn && p.barcode].filter(Boolean).join(' · ') || 'No category'}{p.sell_without_stock ? ' · sells at 0 stock' : ''}</span>
                 {canEdit && !costMode && <span>{cost > 0 ? `Cost ${money(cost, business.currency)}` : 'No cost price'}{margin !== null && <b style={{ color: margin < 10 ? '#7A2A00' : '#0A4F74' }}> · {margin}% margin</b>}</span>}
               </span>
               <span className="amt">{money(p.price, business.currency)}<span className="muted small" style={{ fontWeight: 600 }}> /{p.unit || 'pc'}</span></span>
@@ -350,6 +360,14 @@ export default function Products() {
           <b style={{ whiteSpace: 'nowrap' }}>{ids.length} selected</b>
           <button className="btn small" onClick={() => setPicked(ids.length === shown.length ? new Set() : new Set(shown.map((p) => p.id)))}>{ids.length === shown.length && shown.length ? 'None' : 'All'}</button>
           <span style={{ flex: 1 }} />
+          {hasSws && (
+            <select className="input" value="" disabled={!ids.length} onChange={(e) => { if (e.target.value) bulkSws(e.target.value === 'on'); }}
+              aria-label="When out of stock" style={{ width: 'auto', minHeight: 40, fontSize: 13, padding: '6px 10px' }}>
+              <option value="">At 0 stock…</option>
+              <option value="off">Stop selling</option>
+              <option value="on">Keep selling</option>
+            </select>
+          )}
           <button className="btn small" disabled={!ids.length} onClick={() => bulkActive(false)}>Hide</button>
           <button className="btn small" disabled={!ids.length} onClick={() => bulkActive(true)}>Show</button>
           <button className="btn small danger" disabled={!ids.length} onClick={() => setConfirmDel(true)}>Delete</button>
@@ -442,6 +460,17 @@ export default function Products() {
             <label className="row" style={{ marginBottom: 14 }}>
               <input type="checkbox" checked={!!edit.track_stock} onChange={set('track_stock')} /> Track stock for this {label.toLowerCase()}
             </label>
+            {hasSws && (edit.track_stock || edit.stock_of) && (
+              <div className="tint" style={{ marginBottom: 14 }}>
+                <label className="row" style={{ margin: 0, alignItems: 'flex-start' }}>
+                  <input type="checkbox" checked={!!edit.sell_without_stock} onChange={set('sell_without_stock')} style={{ marginTop: 4 }} />
+                  <span><b>Sell even when out of stock</b><br />
+                    <span className="small muted">{edit.sell_without_stock
+                      ? 'The till lets this be sold when the stock is at 0. Stock goes below zero until you add more.'
+                      : 'Off: the till stops selling this when the stock reaches 0. Turn on for things you sell before counting them in.'}</span></span>
+                </label>
+              </div>
+            )}
             {hasNew && !edit.track_stock && (
               <label className="field"><span>Sell from the stock of (optional)</span>
                 <select className="input" value={edit.stock_of || ''} onChange={set('stock_of')}>

@@ -705,3 +705,6 @@ button.lrow { cursor: pointer; }
 .splitsum.ok { background: #DDF1EE; color: #1E4A46; }
 [data-theme="dark"] .splitsum.due { background: #4B3B17; color: #F3D58E; }
 [data-theme="dark"] .splitsum.ok { background: #1F4D49; color: #BFEDE8; }
+/* till: an item that cannot be sold (out of stock, not allowed to sell at 0) */
+.tile.off { opacity: 0.55; filter: grayscale(0.4); }
+.tile.off .stk.out { background: #FFE1CF; color: #7A2A00; }
