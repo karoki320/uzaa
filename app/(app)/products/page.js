@@ -184,12 +184,6 @@ export default function Products() {
       payload.bulk_price = payload.bulk_min ? bp : null;
       payload.stock_of = !payload.track_stock && edit.stock_of && edit.stock_of !== edit.id ? edit.stock_of : null;
     }
-    // Pour / Decant: which item refills this one, and how much of it one unit uses (patch 19, switched on per business)
-    if (pourOn) {
-      const rq = Number(edit.refill_qty);
-      payload.refill_from = edit.refill_from && edit.refill_from !== edit.id && rq > 0 ? edit.refill_from : null;
-      payload.refill_qty = payload.refill_from ? rq : null;
-    }
     let error;
     let saved = null;
     if (edit.id) {
@@ -252,7 +246,6 @@ export default function Products() {
   };
   const ids = picked ? [...picked] : [];
   // the database has the "sell even when out of stock" setting (patch 17)
-  const pourOn = !!business.features?.pour && canEdit;
   const hasSws = rows.some((r) => Object.prototype.hasOwnProperty.call(r, 'sell_without_stock'));
   async function bulkSws(on) {
     setRows((list) => list.map((r) => (picked.has(r.id) ? { ...r, sell_without_stock: on } : r)));
@@ -476,34 +469,6 @@ export default function Products() {
                       ? 'The till lets this be sold when the stock is at 0. Stock goes below zero until you add more.'
                       : 'Off: the till stops selling this when the stock reaches 0. Turn on for things you sell before counting them in.'}</span></span>
                 </label>
-              </div>
-            )}
-            {pourOn && (
-              <div className="tint" style={{ marginBottom: 14 }}>
-                <b className="small">Refilled or decanted from (optional)</b>
-                <div className="row" style={{ marginTop: 6 }}>
-                  <select className="input grow" value={edit.refill_from || ''} onChange={(e) => setEdit({ ...edit, refill_from: e.target.value, refill_qty: edit.refill_qty || (e.target.value ? 1 : '') })} aria-label="Refilled from">
-                    <option value="">Not refilled from another item</option>
-                    {rows.filter((r) => r.id !== edit.id && r.active).map((r) => <option key={r.id} value={r.id}>{r.name} ({r.unit || 'pc'})</option>)}
-                  </select>
-                </div>
-                {edit.refill_from && (() => {
-                  const src = rows.find((r) => r.id === edit.refill_from);
-                  const su = src?.unit && src.unit !== 'pc' ? src.unit : 'pcs';
-                  return (
-                    <>
-                      <label className="field" style={{ margin: '10px 0 4px' }}>
-                        <span>Each 1 {edit.unit && edit.unit !== 'pc' ? edit.unit : 'piece'} of this uses how many {su} of {src?.name}?</span>
-                        <input className="input" inputMode="decimal" value={edit.refill_qty ?? ''} onChange={set('refill_qty')} placeholder="e.g. 1 for ml to ml, 10 for a 10 ml decant" />
-                      </label>
-                      <span className="small muted">
-                        {Number(edit.refill_qty) > 0
-                          ? `Making 10 ${edit.unit && edit.unit !== 'pc' ? edit.unit : 'pieces'} of this takes ${num(Number(edit.refill_qty) * 10)} ${su} off ${src?.name}.`
-                          : 'Examples: display bottle in ml from wholesale ml = 1. A 10 ml decant (sold per piece) from wholesale ml = 10. A 10 ml decant from a 100 ml bottle counted in bottles = 0.1.'}
-                      </span>
-                    </>
-                  );
-                })()}
               </div>
             )}
             {hasNew && !edit.track_stock && (

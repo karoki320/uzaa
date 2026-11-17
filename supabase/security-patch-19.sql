@@ -85,3 +85,61 @@ begin
 end $$;
 revoke execute on function pour_stock(uuid, uuid, numeric, text) from public, anon;
 grant execute on function pour_stock(uuid, uuid, numeric, text) to authenticated;
+
+-- 4. Pour without any setup: the till matches items by name and sends both ends.
+--    p_per = how much of the source one unit of the receiving item uses (1 for ml to ml, 10 for a 10 ml decant).
+--    The rate is remembered on the receiving item, so next time it is filled in already.
+create or replace function pour_between(p_from uuid, p_to uuid, p_branch uuid, p_qty numeric, p_per numeric default 1, p_note text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare bid uuid := my_business(); r text := my_role(); src record; it record;
+  src_id uuid; src_track boolean; src_name text; src_unit text; src_allow boolean;
+  dst_id uuid; dst_track boolean; dst_name text;
+  q numeric := round(coalesce(p_qty, 0), 3); per numeric := coalesce(p_per, 1); need numeric; left_q numeric; got numeric;
+  why text := left(btrim(coalesce(p_note, '')), 120);
+begin
+  if bid is null or r not in ('owner','manager','cashier') then raise exception 'Not allowed'; end if;
+  if not coalesce((select (features->>'pour')::boolean from businesses where id = bid), false) then
+    raise exception 'Pour / Decant is not switched on for this business';
+  end if;
+  if not exists (select 1 from branches where id = p_branch and business_id = bid) then raise exception 'Bad branch'; end if;
+  if r = 'cashier' and p_branch is distinct from my_branch() then raise exception 'Not your branch'; end if;
+  if q <= 0 or q > 1000000 then raise exception 'Enter how much you are pouring'; end if;
+  if per <= 0 or per > 100000 then raise exception 'Enter how much each one holds'; end if;
+  if p_from = p_to then raise exception 'Choose two different items'; end if;
+  select * into src from products where id = p_from and business_id = bid;
+  if not found then raise exception 'Unknown item to pour from'; end if;
+  select * into it from products where id = p_to and business_id = bid;
+  if not found then raise exception 'Unknown item to pour into'; end if;
+
+  select p.id, p.track_stock, p.name, p.unit, p.sell_without_stock into src_id, src_track, src_name, src_unit, src_allow
+    from products p where p.id = coalesce(case when not src.track_stock then src.stock_of end, src.id);
+  select p.id, p.track_stock, p.name into dst_id, dst_track, dst_name
+    from products p where p.id = coalesce(case when not it.track_stock then it.stock_of end, it.id);
+  if not src_track then raise exception '% does not track stock, so nothing can be poured from it', src_name; end if;
+  if not dst_track then raise exception '% does not track stock. Turn on "Track stock" for it first.', dst_name; end if;
+  if src_id = dst_id then raise exception '% and % already share one stock count, so there is nothing to move', src.name, it.name; end if;
+
+  need := round(q * per, 3);
+  perform pg_advisory_xact_lock(hashtext(bid::text));
+  insert into stock(product_id, branch_id, business_id, qty) values (src_id, p_branch, bid, -need)
+    on conflict (product_id, branch_id) do update set qty = stock.qty - need
+    returning qty into left_q;
+  if left_q < 0 and not coalesce(src_allow, false) then
+    raise exception 'Only % % of % left: not enough to make % %',
+      to_char(left_q + need, 'FM999999990.###'), coalesce(nullif(src_unit, 'pc'), 'pcs'), src_name,
+      to_char(q, 'FM999999990.###'), coalesce(nullif(it.unit, 'pc'), 'pcs');
+  end if;
+  insert into stock(product_id, branch_id, business_id, qty) values (dst_id, p_branch, bid, q)
+    on conflict (product_id, branch_id) do update set qty = stock.qty + q
+    returning qty into got;
+  insert into stock_movements(business_id, branch_id, product_id, change, reason, user_id) values
+    (bid, p_branch, src_id, -need, left('Poured into ' || it.name || case when why <> '' then ' (' || why || ')' else '' end, 200), auth.uid()),
+    (bid, p_branch, dst_id, q, left('Poured from ' || src.name || case when why <> '' then ' (' || why || ')' else '' end, 200), auth.uid());
+  update products set refill_from = src.id, refill_qty = per,
+         cost = case when coalesce(cost, 0) = 0 and coalesce(src.cost, 0) > 0 then round(src.cost * per, 2) else cost end
+   where id = it.id;
+  return jsonb_build_object('from', src_name, 'took', need, 'from_unit', src_unit, 'from_left', left_q,
+                            'to', it.name, 'added', q, 'to_unit', it.unit, 'to_now', got);
+end $$;
+revoke execute on function pour_between(uuid, uuid, uuid, numeric, numeric, text) from public, anon;
+grant execute on function pour_between(uuid, uuid, uuid, numeric, numeric, text) to authenticated;
