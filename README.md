@@ -52,3 +52,20 @@ Or send them to `/signup`. They pick a business type, and they are selling withi
 4. After a sale the cashier taps **E-receipt** (or opens the sale under Sales), types the customer's number, and WhatsApp opens on the till phone with the message ready. The message comes from whichever WhatsApp account is on that phone, so log it into the shop's number.
 5. The link opens `/r/<token>`: a public, branded receipt page that never expires and can be printed or saved as PDF.
 
+
+## Subscription billing (Paystack)
+
+Clients pay for Uzaa with M-Pesa or card through Paystack. Uzaa locks a business that has not paid.
+
+1. Run `supabase/security-patch-18.sql` (or `apply-all.sql`) in the SQL Editor.
+2. In Vercel set `PAYSTACK_SECRET_KEY` (`sk_test_...` while testing, `sk_live_...` to go live) and `PUBLIC_SITE_URL=https://uzaa.co.ke`. Optional: `BILLING_GRACE_DAYS` (default 7).
+3. In Paystack, open Settings > API Keys & Webhooks and set the webhook URL to `https://uzaa.co.ke/api/paystack/webhook`. Set it once in Test Mode and again in Live Mode.
+
+How it works:
+
+- When a client signs a generated agreement, their plan, price, period and set-up fee become their subscription. The signed page shows **Pay**. They pay the set-up fee plus the first period, and the business switches on by itself.
+- Owners see **Billing** in the menu: plan, paid-up date, Pay now, and their payment history. Paying early adds a full period after the current paid-up date.
+- A card payment can be saved, at the client's choice, and charged automatically on the due date. M-Pesa is never charged automatically. Owners can remove the card under Billing.
+- Each day at 08:00 (`/api/billing/daily`, see `vercel.json`), Uzaa charges saved cards that are due. It reminds owners by phone alert 5 days and 1 day before the due date and on the day, and again while they are overdue. A business more than 7 days overdue is locked (`lapsed`): nobody can sell, and the owner sees **Pay and unlock**. Its data is kept. A payment unlocks it immediately.
+- The super admin sees a Billing column and a **Billing** button for each business. Use it to set the price for clients without a generated agreement, or to record a payment made outside Paystack by moving "Paid up to" forward. A business with no paid-up date is never locked.
+- A payment only counts once Paystack confirms it to our server, either through the return page or the webhook. The amount and currency are checked against what was asked.

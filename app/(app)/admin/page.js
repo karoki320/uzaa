@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { fmtDate, money, num } from '@/lib/util';
 import { post } from '@/lib/api';
 import Modal from '@/components/Modal';
+import { BillingCell, BillingModal } from '@/components/AdminBilling';
 import { AGR, OnboardClient, NewAgreement, SendAgreement, AgreementList } from '@/components/AdminAgreements';
 
 export default function Admin() {
@@ -18,6 +19,8 @@ export default function Admin() {
   const [onboard, setOnboard] = useState(false);
   const [newAgr, setNewAgr] = useState(null);  // business
   const [send, setSend] = useState(null);      // { agreement, title, note }
+  const [bill, setBill] = useState({ subs: {}, payments: [], err: '' });
+  const [billFor, setBillFor] = useState(null); // business
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_overview');
@@ -32,7 +35,15 @@ export default function Admin() {
       setAgrErr(''); setAgrs(j.rows || []);
     } catch { setAgrErr('No connection'); }
   }, []);
-  useEffect(() => { load(); loadAgrs(); }, [load, loadAgrs]);
+  const loadBill = useCallback(async () => {
+    try {
+      const r = await fetch('/api/admin/billing', { cache: 'no-store' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) return setBill((b) => ({ ...b, err: j.error || 'Could not load billing' }));
+      setBill({ subs: Object.fromEntries((j.subs || []).map((x) => [x.business_id, x])), payments: j.payments || [], err: '' });
+    } catch {}
+  }, []);
+  useEffect(() => { load(); loadAgrs(); loadBill(); }, [load, loadAgrs, loadBill]);
 
   async function toggle(b) {
     const next = b.status === 'active' ? 'suspended' : 'active';
@@ -83,7 +94,9 @@ export default function Admin() {
   // What needs the admin: signed and waiting to go live, unsigned for 3+ days, live but gone quiet.
   const attention = [
     ...rows.filter((r) => r.status === 'pending' && r.agreement_status === 'signed')
-      .map((r) => ({ r, key: `go${r.id}`, text: `${r.name} signed the agreement. Activate them when payment is in.`, act: 'activate' })),
+      .map((r) => ({ r, key: `go${r.id}`, text: `${r.name} signed the agreement. They switch on by themselves when they pay online, or activate them if they paid another way.`, act: 'activate' })),
+    ...rows.filter((r) => r.status === 'lapsed')
+      .map((r) => ({ r, key: `lp${r.id}`, text: `${r.name} is locked for not paying.`, act: 'billing' })),
     ...(agrs || []).filter((a) => ['sent', 'viewed'].includes(a.status) && Date.now() - new Date(a.sent_at) > 3 * 864e5)
       .map((a) => ({ a, key: `ag${a.id}`, text: `${a.client_business || a.client_name} has not signed agreement ${a.ref} (sent ${fmtDate(a.sent_at)}).`, act: 'remind' })),
     ...rows.filter((r) => r.status === 'pending' && hasPerf && !r.agreement_status)
@@ -126,6 +139,7 @@ export default function Admin() {
             <div key={x.key} className="attn">
               <span className="small">{x.text}</span>
               {x.act === 'activate' && <button className="btn small primary" onClick={() => toggle(x.r)}>Activate</button>}
+              {x.act === 'billing' && <button className="btn small" onClick={() => setBillFor(x.r)}>Billing</button>}
               {x.act === 'remind' && <button className="btn small" onClick={() => setSend({ agreement: x.a, title: 'Remind them to sign' })}>Remind</button>}
               {x.act === 'agreement' && <button className="btn small" onClick={() => setNewAgr(x.r)}>Send agreement</button>}
               {x.act === 'call' && x.r.owner_phone && <a className="btn small" href={`tel:${x.r.owner_phone.replace(/\s/g, '')}`}>Call</a>}
@@ -171,6 +185,11 @@ export default function Admin() {
           onDone={(a) => { setNewAgr(null); loadAgrs(); load(); setSend({ agreement: a, title: 'Agreement ready' }); }} />
       )}
       {send && <SendAgreement {...send} onClose={() => setSend(null)} />}
+      {billFor && (
+        <BillingModal business={billFor} sub={bill.subs[billFor.id]} payments={bill.payments}
+          onClose={() => setBillFor(null)} onDone={() => { setBillFor(null); loadBill(); load(); }} />
+      )}
+      {bill.err && tab === 'businesses' && <div className="note small">{bill.err}</div>}
 
       {tab === 'team' && <SalesTeam />}
 
@@ -184,12 +203,12 @@ export default function Admin() {
           <div className="row" style={{ marginBottom: 10 }}>
             <input className="input grow" placeholder="Search a business, owner, email or phone" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search clients" />
             <select className="input" style={{ width: 'auto' }} value={show} onChange={(e) => setShow(e.target.value)} aria-label="Status">
-              <option value="all">All</option><option value="active">Active</option><option value="pending">Waiting</option><option value="suspended">Suspended</option>
+              <option value="all">All</option><option value="active">Active</option><option value="pending">Waiting</option><option value="suspended">Suspended</option><option value="lapsed">Locked: unpaid</option>
             </select>
           </div>
           <div className="card table-wrap">
             <table>
-              <thead><tr><th>Business</th><th>Owner</th><th className="num">Today</th><th className="num">7 days</th><th className="num">30 days</th><th className="num">Sales</th><th>Last sale</th><th>Agreement</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Business</th><th>Owner</th><th className="num">Today</th><th className="num">7 days</th><th className="num">30 days</th><th className="num">Sales</th><th>Last sale</th><th>Agreement</th><th>Billing</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 {list.map((b) => (
                   <tr key={b.id}>
@@ -209,7 +228,9 @@ export default function Admin() {
                     <td>
                       {b.agreement_status ? <span className={`badge ${AGR[b.agreement_status]?.cls || ''}`}>{AGR[b.agreement_status]?.label}</span> : <span className="small muted">None</span>}
                     </td>
+                    <td><BillingCell sub={bill.subs[b.id]} /></td>
                     <td>
+                      {b.status === 'lapsed' && <span className="badge red">Locked: unpaid</span>}
                       {b.status === 'active' && <span className="badge">Active</span>}
                       {b.status === 'pending' && <span className="badge amber">Waiting for activation</span>}
                       {b.status === 'suspended' && <span className="badge red">Suspended</span>}
@@ -217,13 +238,14 @@ export default function Admin() {
                     <td className="right">
                       <div className="row" style={{ justifyContent: 'flex-end', gap: 6, flexWrap: 'nowrap' }}>
                         <button className={`btn small ${b.status === 'active' ? 'danger' : 'primary'}`} onClick={() => toggle(b)}>{b.status === 'active' ? 'Suspend' : b.status === 'pending' ? 'Activate' : 'Reactivate'}</button>
+                        <button className="btn small" onClick={() => setBillFor(b)}>Billing</button>
                         <button className="btn small" onClick={() => setNewAgr(b)}>Agreement</button>
                         <button className="btn small danger" onClick={() => askDelete(b)}>Remove</button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {list.length === 0 && <tr><td colSpan="10" className="muted">{rows.length ? 'Nothing matches that.' : 'No clients yet. Press "Onboard a client".'}</td></tr>}
+                {list.length === 0 && <tr><td colSpan="11" className="muted">{rows.length ? 'Nothing matches that.' : 'No clients yet. Press "Onboard a client".'}</td></tr>}
               </tbody>
             </table>
           </div>

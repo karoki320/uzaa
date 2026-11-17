@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 // The client signs: their drawn signature, their typed name and a tick that they agree.
 // The time, internet address and device are recorded with it. The business stays waiting until the
-// Uzaa admin activates it.
+// first payment is in (Paystack, from the agreement page) or the Uzaa admin activates it.
 export async function POST(req, { params }) {
   if (!serverReady()) return bad('Server is not set up', 500);
   if (!sameOrigin(req)) return bad('Blocked', 403);
@@ -28,7 +28,7 @@ export async function POST(req, { params }) {
   if (b.drawn !== true) return bad('Draw your signature in the box');
 
   const sb = adminClient();
-  const { data: a } = await sb.from('agreements').select('id,status,business_id,client_email,viewed_at').eq('token', token).maybeSingle();
+  const { data: a } = await sb.from('agreements').select('id,status,business_id,client_email,viewed_at,terms').eq('token', token).maybeSingle();
   if (!a || a.status === 'void') return bad('This agreement link is no longer valid', 404);
   if (a.status === 'signed') return bad('This agreement has already been signed', 409);
 
@@ -40,5 +40,17 @@ export async function POST(req, { params }) {
   }).eq('id', a.id).in('status', ['sent', 'viewed']).select('id').maybeSingle();
   if (error || !done) return bad('Could not save your signature. Please try again.');
   await logEvent(sb, 'agreement_signed', { email: a.client_email, ip, success: true });
+
+  // Billing follows the signed terms: the client pays the set-up fee and first period on the next screen.
+  const t = a.terms || {};
+  if (a.business_id && Number(t.fee) > 0) {
+    await sb.from('subscriptions').upsert({
+      business_id: a.business_id, agreement_id: a.id, plan: String(t.plan || 'Uzaa POS Standard').slice(0, 60),
+      fee: Number(t.fee), period: ['quarter', 'year'].includes(t.period) ? t.period : 'month',
+      setup_fee: Number(t.setup_fee) || 0, currency: 'KES',
+      start_date: /^\d{4}-\d{2}-\d{2}$/.test(String(t.start_date || '')) ? t.start_date : null,
+      bill_email: String(a.client_email || '').toLowerCase(), updated_at: now,
+    }, { onConflict: 'business_id' });
+  }
   return ok({ signed_at: now });
 }

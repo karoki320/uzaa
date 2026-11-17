@@ -10,7 +10,7 @@ const COOKIE = {
   maxAge: 60 * 60 * 24 * 365,
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
 };
-const PROTECTED = ['/pos', '/products', '/stock', '/sales', '/reports', '/expenses', '/credit', '/staff', '/branches', '/settings', '/security', '/admin', '/agent', '/home'];
+const PROTECTED = ['/pos', '/products', '/stock', '/sales', '/reports', '/expenses', '/credit', '/staff', '/branches', '/settings', '/billing', '/security', '/admin', '/agent', '/home'];
 
 const retryable = (e) => !e.status || e.status >= 500 || e.status === 429 || /fetch|network|timeout|retryable/i.test(`${e.name} ${e.message}`);
 

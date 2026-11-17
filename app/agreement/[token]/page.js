@@ -4,6 +4,10 @@ import { adminClient, serverReady } from '@/lib/server';
 import { hit } from '@/lib/ratelimit';
 import { tokenOk, stamp, provider } from '@/lib/agreement';
 import SignAgreement from '@/components/SignAgreement';
+import PayButton from '@/components/PayButton';
+import { standing, nextCharge, longDate, PER } from '@/lib/billing';
+import { paystackReady } from '@/lib/paystack';
+import { money } from '@/lib/util';
 import Logo from '@/components/Logo';
 import AssistantPage, { AskUzaa } from '@/components/AssistantPage';
 
@@ -17,13 +21,21 @@ async function load(token) {
   if (await hit('agreementview', `ip:${ip}`, { limit: 120, window: 900 })) return { busy: true };
   const sb = adminClient();
   const { data: a } = await sb.from('agreements')
-    .select('id,token,kind,ref,client_name,client_business,client_email,client_phone,terms,doc_name,doc_hash,status,sent_at,viewed_at,signed_at,signer_name,signer_title,created_at')
+    .select('id,business_id,token,kind,ref,client_name,client_business,client_email,client_phone,terms,doc_name,doc_hash,status,sent_at,viewed_at,signed_at,signer_name,signer_title,created_at')
     .eq('token', token).maybeSingle();
   if (!a) return null;
   if (a.status === 'sent') {
     const now = new Date().toISOString();
     await sb.from('agreements').update({ status: 'viewed', viewed_at: now }).eq('id', a.id).eq('status', 'sent');
     a.status = 'viewed'; a.viewed_at = now;
+  }
+  // What the client pays now that they have signed (set-up fee and first period), if billing is set.
+  if (a.status === 'signed' && a.business_id) {
+    const [{ data: sub }, { data: biz }] = await Promise.all([
+      sb.from('subscriptions').select('*').eq('business_id', a.business_id).maybeSingle(),
+      sb.from('businesses').select('status').eq('id', a.business_id).maybeSingle(),
+    ]);
+    if (sub && Number(sub.fee) > 0) a.bill = { sub, st: standing(sub, biz?.status), next: nextCharge(sub), biz: biz?.status };
   }
   return a;
 }
@@ -78,7 +90,21 @@ export default async function AgreementPage({ params }) {
                   <span>Open the email from Uzaa that says &quot;You have been invited&quot; ({a.client_email || 'your email'}) and choose a password. Can&apos;t find it? Check Spam, or use Forgot password with the same email.</span>
                   <a className="btn small" href="/forgot-password">Set or reset my password</a>
                 </li>
-                <li><b>Account activation</b><span>{p.name} activates your account once your first payment is in. You will then be able to sign in and sell.</span></li>
+                {a.bill && paystackReady() && (a.bill.st.state === 'unpaid' || a.bill.st.state === 'lapsed' || a.bill.biz === 'pending') && !(a.bill.st.state === 'ok' || a.bill.st.state === 'due') ? (
+                  <li>
+                    <b>Pay to switch on your account</b>
+                    <span>
+                      {money(a.bill.next.amount, a.bill.sub.currency)}
+                      {a.bill.next.setup ? `: set-up fee ${money(a.bill.sub.setup_fee, a.bill.sub.currency)} + first ${PER[a.bill.sub.period]} ${money(a.bill.sub.fee, a.bill.sub.currency)}` : ` for the first ${PER[a.bill.sub.period]}`}.
+                      {' '}Your account switches on the moment the payment is confirmed.
+                    </span>
+                    <PayButton endpoint={`/api/agreement/${a.token}/pay`} label={`Pay ${money(a.bill.next.amount, a.bill.sub.currency)} with M-Pesa or card`} />
+                  </li>
+                ) : a.bill && (a.bill.st.state === 'ok' || a.bill.st.state === 'due') ? (
+                  <li className="done"><b>First payment</b><span>Paid. Thank you! Your account is active up to {longDate(a.bill.sub.paid_until)}.</span></li>
+                ) : (
+                  <li><b>Account activation</b><span>{p.name} activates your account once your first payment is in. You will then be able to sign in and sell.</span></li>
+                )}
                 <li>
                   <b>Set up your business</b>
                   <span>Your business details, branches, products and stock, and your staff with their roles (owner, manager, cashier). The Uzaa Assistant asks you a few questions and builds your checklist.</span>

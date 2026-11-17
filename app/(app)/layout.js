@@ -10,6 +10,8 @@ import ThemePick from '@/components/ThemePick';
 import SyncStatus from '@/components/SyncStatus';
 import AcceptTerms from '@/components/AcceptTerms';
 import InstallBanner from '@/components/InstallBanner';
+import BillingBanner from '@/components/BillingBanner';
+import PayButton from '@/components/PayButton';
 import { listQueue } from '@/lib/offline';
 
 const NAV = [
@@ -24,6 +26,7 @@ const NAV = [
   { href: '/branches', label: 'Branches', roles: ['owner'] },
   { href: '/staff', label: 'Staff', roles: ['owner'] },
   { href: '/settings', label: 'Settings', roles: ['owner'] },
+  { href: '/billing', label: 'Billing', roles: ['owner'] },
   { href: '/admin', label: 'All businesses', short: 'Businesses', roles: ['super_admin'] },
   { href: '/security', label: 'Security', roles: ['owner', 'manager', 'cashier', 'super_admin', 'sales'] },
 ];
@@ -78,6 +81,25 @@ export default function Shell({ children }) {
     return <AcceptTerms name={profile.full_name} onDone={reload} onSignOut={rawSignOut} />;
   }
 
+  // Not paid: the till is locked (the database refuses sales too). The owner can pay right here.
+  if (profile.active && business?.status === 'lapsed') {
+    const owner = profile.role === 'owner';
+    return (
+      <div className="auth">
+        <div className="card">
+          <h2>Uzaa is locked</h2>
+          <p>
+            {owner
+              ? 'Your Uzaa subscription is unpaid. Pay with M-Pesa or card and Uzaa unlocks as soon as the payment is confirmed. All your products, stock and sales are safe.'
+              : 'This business\'s Uzaa subscription is unpaid, so selling is paused. Please ask the owner to renew. Nothing has been lost.'}
+          </p>
+          {owner && <PayButton endpoint="/api/billing" label="Pay and unlock" />}
+          <button className="btn" style={{ marginTop: 10 }} onClick={signOut}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
+
   if (!profile.active || (business && business.status !== 'active')) {
     return (
       <div className="auth">
@@ -87,7 +109,7 @@ export default function Shell({ children }) {
             {!profile.active
               ? 'Your account has been disabled. Please contact your business owner.'
               : business?.status === 'pending'
-                ? 'Your Uzaa account is set up and waiting to be activated. If you were sent a service agreement, sign it from the link you received. Uzaa will activate your account shortly after.'
+                ? 'Your Uzaa account is set up and waiting to be activated. If you were sent a service agreement, sign it and pay from the link you received: your account switches on as soon as the payment is confirmed.'
                 : 'This business account is suspended. Please contact Uzaa support.'}
           </p>
           <button className="btn" onClick={signOut}>Sign out</button>
@@ -118,7 +140,7 @@ export default function Shell({ children }) {
           <Link key={n.href} href={n.href} className={`tab ${path.startsWith(n.href) ? 'active' : ''}`}>{n.label}</Link>
         ))}
       </nav>
-      <main className="page"><InstallBanner />{allowed ? children : null}</main>
+      <main className="page"><BillingBanner role={profile.role} /><InstallBanner />{allowed ? children : null}</main>
       <BottomNav items={items} signOut={signOut} who={`${profile.full_name} (${profile.role.replace('_', ' ')})`} />
     </>
   );
