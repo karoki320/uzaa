@@ -146,7 +146,7 @@ export default function Sales() {
             )}
             <a className="btn primary" href={xlsxUrl} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Download Excel</a>
           </div>
-          <p className="muted small" style={{ margin: '8px 0 0' }}>One file with every sale, every item sold, and totals by payment method. Up to one year at a time.</p>
+          <p className="muted small" style={{ margin: '8px 0 0' }}>One file: every sale with what was sold on it, every item sold, totals per product and per payment method. Up to one year at a time.</p>
         </div>
       )}
 

@@ -53,6 +53,9 @@ export async function GET(req) {
   const pn = Object.fromEntries((pps || []).map((p) => [p.id, p.full_name]));
   const pc = Object.fromEntries((prods || []).map((p) => [p.id, p.category || '']));
 
+  const num = (v) => Number(v || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 });
+  const qtyTxt = (it) => `${num(it.qty)}${it.unit && it.unit !== 'pc' ? ` ${it.unit}` : ''}`;
+
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Uzaa';
   const money = '#,##0.00';
@@ -73,12 +76,15 @@ export async function GET(req) {
     { header: 'Items', key: 'n', width: 8 }, { header: 'Subtotal', key: 'sub', width: 13, style: { numFmt: money } },
     { header: 'Discount', key: 'dis', width: 12, style: { numFmt: money } }, { header: 'Tax', key: 'tax', width: 12, style: { numFmt: money } },
     { header: 'Total', key: 'tot', width: 13, style: { numFmt: money } }, { header: 'Amount paid', key: 'paid', width: 13, style: { numFmt: money } },
+    { header: 'What was sold', key: 'what', width: 60, style: { alignment: { wrapText: true, vertical: 'top' } } },
   ];
   head(ws);
   sales.forEach((s) => {
     const dt = new Date(s.created_at);
     ws.addRow({ no: Number(s.receipt_no), d: dFmt.format(dt), t: tFmt.format(dt), b: bn[s.branch_id] || '', c: pn[s.cashier_id] || '', pm: s.payments?.length ? s.payments.map((p) => `${p.method} ${Number(p.amount).toLocaleString('en-KE')}`).join(' + ') : s.payment_method || '',
-      n: (s.sale_items || []).length, sub: Number(s.subtotal), dis: Number(s.discount), tax: Number(s.tax), tot: Number(s.total), paid: Number(s.amount_paid) });
+      n: (s.sale_items || []).length, sub: Number(s.subtotal), dis: Number(s.discount), tax: Number(s.tax), tot: Number(s.total), paid: Number(s.amount_paid),
+      // the items on this receipt, e.g. "2 x Ana Abiyedh @ 870; 30 ml x Kenya Love @ 33.33"
+      what: (s.sale_items || []).map((it) => `${qtyTxt(it)} x ${it.name} @ ${num(it.price)}`).join('; ') });
   });
   const last = sales.length + 1;
   const sum = (k) => sales.reduce((t, x) => t + Number(x[k] || 0), 0);
@@ -87,7 +93,7 @@ export async function GET(req) {
   tr.border = { top: { style: 'thin' } };
 
   // Sheet 2: every item sold
-  const wi = wb.addWorksheet('Items');
+  const wi = wb.addWorksheet('Items sold');
   wi.columns = [
     { header: 'Receipt no', key: 'no', width: 11 }, { header: 'Date', key: 'd', width: 12 }, { header: 'Time', key: 't', width: 8 },
     { header: 'Branch', key: 'b', width: 18 }, { header: 'Item', key: 'i', width: 32 }, { header: 'Category', key: 'cat', width: 16 },
@@ -111,7 +117,28 @@ export async function GET(req) {
   ti.font = { bold: true };
   ti.border = { top: { style: 'thin' } };
 
-  // Sheet 3: totals by payment method
+  // Sheet 3: each product, how much was sold in the period
+  const wq = wb.addWorksheet('By product');
+  wq.columns = [
+    { header: 'Item', key: 'i', width: 34 }, { header: 'Category', key: 'cat', width: 16 }, { header: 'Unit', key: 'u', width: 8 },
+    { header: 'Quantity sold', key: 'q', width: 14, style: { numFmt: '#,##0.###' } }, { header: 'Sales', key: 'n', width: 8 },
+    { header: 'Revenue', key: 'r', width: 14, style: { numFmt: money } }, { header: 'Profit', key: 'pf', width: 14, style: { numFmt: money } },
+  ];
+  head(wq);
+  const per = {};
+  sales.forEach((s) => (s.sale_items || []).forEach((it) => {
+    const k = `${it.name}|${it.unit || 'pc'}`;
+    const x = per[k] || (per[k] = { i: it.name, cat: pc[it.product_id] || '', u: it.unit || 'pc', q: 0, n: 0, r: 0, pf: 0 });
+    const line = Number(it.qty) * Number(it.price);
+    x.q += Number(it.qty); x.n += 1; x.r += line; x.pf += line - Number(it.cost) * Number(it.qty);
+  }));
+  Object.values(per).sort((a, b) => b.r - a.r).forEach((x) => wq.addRow(x));
+  const lq = Object.keys(per).length + 1;
+  const tq = wq.addRow({ i: 'Total', r: { formula: `SUM(F2:F${lq})`, result: Object.values(per).reduce((t, x) => t + x.r, 0) }, pf: { formula: `SUM(G2:G${lq})`, result: Object.values(per).reduce((t, x) => t + x.pf, 0) } });
+  tq.font = { bold: true };
+  tq.border = { top: { style: 'thin' } };
+
+  // Sheet 4: totals by payment method
   const wp = wb.addWorksheet('By payment method');
   wp.columns = [{ header: 'Paid by', key: 'm', width: 18 }, { header: 'Sales', key: 'n', width: 10 }, { header: 'Total', key: 't', width: 14, style: { numFmt: money } }];
   head(wp);
