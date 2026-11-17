@@ -45,6 +45,21 @@ export default function Admin() {
   }, []);
   useEffect(() => { load(); loadAgrs(); loadBill(); }, [load, loadAgrs, loadBill]);
 
+  // extras switched on for one business only (Pour / Decant for Scent City, ...): businesses.features, patch 19
+  const [feats, setFeats] = useState({});
+  const loadFeats = useCallback(async () => {
+    const { data, error } = await supabase.from('businesses').select('id,features').range(0, 4999);
+    if (!error) setFeats(Object.fromEntries((data || []).map((x) => [x.id, x.features || {}])));
+  }, []);
+  useEffect(() => { loadFeats(); }, [loadFeats]);
+  async function setFeature(b, key, on) {
+    const next = { ...(feats[b.id] || {}), [key]: on };
+    if (!on) delete next[key];
+    const { error } = await supabase.from('businesses').update({ features: next }).eq('id', b.id);
+    if (error) return alert(/features/.test(error.message) ? 'Run security-patch-19.sql in Supabase first.' : error.message);
+    setFeats((f) => ({ ...f, [b.id]: next }));
+  }
+
   async function toggle(b) {
     const next = b.status === 'active' ? 'suspended' : 'active';
     if (next === 'suspended' && !window.confirm(`Suspend ${b.name}? Their users will be locked out.`)) return;
@@ -239,6 +254,8 @@ export default function Admin() {
                       <div className="row" style={{ justifyContent: 'flex-end', gap: 6, flexWrap: 'nowrap' }}>
                         <button className={`btn small ${b.status === 'active' ? 'danger' : 'primary'}`} onClick={() => toggle(b)}>{b.status === 'active' ? 'Suspend' : b.status === 'pending' ? 'Activate' : 'Reactivate'}</button>
                         <button className="btn small" onClick={() => setBillFor(b)}>Billing</button>
+                        <button className={`btn small ${feats[b.id]?.pour ? 'primary' : ''}`} title="Pour / Decant: refill display bottles and make decants from wholesale stock"
+                          onClick={() => setFeature(b, 'pour', !feats[b.id]?.pour)}>{feats[b.id]?.pour ? 'Pour: on' : 'Pour: off'}</button>
                         <button className="btn small" onClick={() => setNewAgr(b)}>Agreement</button>
                         <button className="btn small danger" onClick={() => askDelete(b)}>Remove</button>
                       </div>

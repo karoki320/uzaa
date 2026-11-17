@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { money, num, fmtDate } from '@/lib/util';
 import Modal from '@/components/Modal';
 import Reorder from '@/components/Reorder';
+import PourStock from '@/components/PourStock';
 import CameraScanner from '@/components/CameraScanner';
 import { barcodeKeys, findByBarcode } from '@/lib/barcode';
 
@@ -15,6 +16,7 @@ const OUT_REASONS = ['Damaged or expired', 'Returned to supplier', 'Stock count 
 export default function Stock() {
   const { business, branches, profile, reload } = useAuth();
   const [reorder, setReorder] = useState(false);
+  const [pour, setPour] = useState(false);   // Pour / Decant (switched on per business)
   const [branchId, setBranchId] = useState(profile.branch_id || branches[0]?.id || '');
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState({});
@@ -148,6 +150,11 @@ export default function Stock() {
         </div>
       </section>
 
+      {business.features?.pour && (
+        <button className="btn" onClick={() => setPour(true)} style={{ width: '100%', minHeight: 54, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3h6M9 3v4l-4 6v6a2 2 0 002 2h6a2 2 0 002-2v-6l-4-6V3" /><path d="M5 14h10" /></svg>Pour / Decant
+        </button>
+      )}
       {business.barcode_enabled !== false && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
           <button className="btn primary" onClick={() => openScan('in')} style={{ minHeight: 54 }}>+ Scan in</button>
@@ -209,6 +216,7 @@ export default function Stock() {
         {moves.length === 0 && <p className="muted" style={{ margin: 0 }}>No changes yet.</p>}
       </div>
 
+      {pour && <PourStock branchId={branchId} onClose={() => { setPour(false); load(); }} />}
       {reorder && (
         <Reorder business={business} isOwner={profile.role === 'owner'} onClose={() => setReorder(false)} onSaved={reload}
           items={products.map((p) => ({ ...p, qty: stock[p.id] ?? 0 })).filter((p) => p.qty <= Number(p.low_stock_level)).sort((a, b) => a.qty - b.qty)} />

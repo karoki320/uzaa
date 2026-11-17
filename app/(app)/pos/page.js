@@ -11,6 +11,7 @@ import Modal from '@/components/Modal';
 import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
 import EReceiptSend from '@/components/EReceiptSend';
+import PourStock from '@/components/PourStock';
 
 // each category gets its own pastel tile colour, so the till is quick to read at a glance
 const TILE_TONES = ['var(--c-teal)', 'var(--c-ice)', 'var(--c-lav)', 'var(--c-amber)', 'var(--c-peach)', 'var(--c-pale)'];
@@ -63,6 +64,7 @@ export default function POS() {
   const label = business.item_label || 'Product';
   const eOn = !!business.ereceipt_enabled;
   const [eSend, setESend] = useState(null);   // the sale whose e-receipt is being sent on WhatsApp
+  const [pour, setPour] = useState(false);   // Pour / Decant from the till (switched on per business)
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -384,6 +386,11 @@ export default function POS() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3" /><path d="M8 8v8M11 8v8M14 8v8M17 8v8" /></svg>
             </button>
           )}
+          {business.features?.pour && (
+            <button type="button" className="iconbtn" style={{ marginLeft: 0 }} onClick={() => setPour(true)} aria-label="Pour or decant" title="Pour / Decant">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3h6M9 3v4l-4 6v6a2 2 0 002 2h6a2 2 0 002-2v-6l-4-6V3" /><path d="M5 14h10" /></svg>
+            </button>
+          )}
           <button type="button" className="iconbtn" style={barcodeOn ? { marginLeft: 0 } : undefined} onClick={() => { setShowSearch((v) => !v); setTimeout(() => input.current?.focus(), 30); }} aria-label="Search" aria-expanded={showSearch}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
           </button>
@@ -556,6 +563,7 @@ export default function POS() {
         </CameraScanner>
       )}
 
+      {pour && <PourStock branchId={branchId} onClose={() => { setPour(false); loadStock(); }} />}
       {eSend && (
         <EReceiptSend
           business={business}
