@@ -15,7 +15,7 @@ export const baseName = (n) => String(n || '').toLowerCase()
   .replace(/[^a-z0-9]+/g, ' ').trim();
 const sizeIn = (n) => { const m = String(n || '').toLowerCase().match(/(\d+(?:\.\d+)?)\s*ml\b/); return m ? Number(m[1]) : null; };
 
-export default function PourStock({ branchId, onClose, onDone }) {
+export default function PourStock({ branchId, businessId, onClose, onDone }) {
   const [products, setProducts] = useState(null);
   const [stock, setStock] = useState({});
   const [fromId, setFromId] = useState('');
@@ -26,6 +26,9 @@ export default function PourStock({ branchId, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
+  // decanting a bottled perfume (counted in pieces): how many bottles were opened, and a new decant item if none exists
+  const [bottles, setBottles] = useState('1');
+  const [mk, setMk] = useState({ ml: '10', price: '' });
 
   const load = async () => {
     const [p, s] = await Promise.all([
@@ -51,6 +54,8 @@ export default function PourStock({ branchId, onClose, onDone }) {
     return list.filter((p) => p.id !== src.id && baseName(p.name) === b && countOf(p)?.track_stock && countOf(p)?.id !== sc);
   }, [src, list]); // eslint-disable-line
   const dst = byId[toId];
+  // a perfume counted in bottles is decanted; an oil counted in ml is poured
+  const decant = !!src && (srcCount?.unit || src.unit || 'pc') === 'pc';
   const sameUnit = src && dst && (src.unit || 'pc') === (dst.unit || 'pc');
 
   // pick the obvious target, and the obvious "how much each one holds"
@@ -63,21 +68,47 @@ export default function PourStock({ branchId, onClose, onDone }) {
     if (!dst || !src) return;
     if ((src.unit || 'pc') === (dst.unit || 'pc')) setPer('1');
     else setPer(String((dst.refill_from === src.id && dst.refill_qty) || sizeIn(dst.name) || ''));
+    // decants: guess how many one bottle makes from the sizes in the names (100ml bottle, 10ml decants = 10)
+    if (decant) {
+      const b = sizeIn(src.name), d = sizeIn(dst.name);
+      const was = dst.refill_from === src.id && Number(dst.refill_qty) > 0 ? Math.round(1 / Number(dst.refill_qty)) : null;
+      setBottles('1');
+      setQty(String(was || (b && d ? Math.floor(b / d) : '')));
+    }
   }, [toId, fromId]); // eslint-disable-line
 
-  const perN = Number(per) || 0;
+  const perN = decant ? (Number(bottles) > 0 && Number(qty) > 0 ? Number(bottles) / Number(qty) : 0) : Number(per) || 0;
   const need = Math.round((Number(qty) || 0) * perN * 1000) / 1000;
   const have = srcCount ? stock[srcCount.id] ?? 0 : 0;
   const short = need > have && !srcCount?.sell_without_stock;
   const sources = list.filter((p) => p.track_stock && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())));
 
+  // no decant item for this perfume yet: make one on the spot (same name + "decant 10ml")
+  async function makeDecant() {
+    const ml = Number(mk.ml), price = Number(mk.price);
+    if (!(ml > 0)) return setErr('Type the ml in each decant');
+    if (!(price > 0)) return setErr('Type the selling price of one decant');
+    setBusy(true); setErr('');
+    const name = `${src.name.replace(/\s*\([^)]*\)/g, '').trim()} decant ${num(ml)}ml`.slice(0, 120);
+    const { data, error } = await supabase.from('products').insert({
+      business_id: businessId, name, price, unit: 'pc', track_stock: true, low_stock_level: 2, category: src.category || '',
+    }).select('*').single();
+    setBusy(false);
+    if (error) return setErr(/row-level security/i.test(error.message) ? 'You cannot add items. Ask the owner to add the decant under Products.' : error.message);
+    setProducts((l) => [...(l || []), data]);
+    setToId(data.id);
+    const b = sizeIn(src.name);
+    setBottles('1'); setQty(b ? String(Math.floor(b / ml)) : '');
+  }
+
   async function pour(e) {
     e.preventDefault();
     if (!src || !dst) return setErr('Choose what you pour from and into');
     if (!(Number(qty) > 0)) return setErr('Type how much you are making');
+    if (decant && !(Number(bottles) > 0)) return setErr('Type how many bottles you opened');
     if (!(perN > 0)) return setErr(`Type how many ${u(src.unit)} go into each one`);
     setBusy(true); setErr('');
-    const { data, error } = await supabase.rpc('pour_between', { p_from: src.id, p_to: dst.id, p_branch: branchId, p_qty: Number(qty), p_per: perN, p_note: '' });
+    const { data, error } = await supabase.rpc('pour_between', { p_from: src.id, p_to: dst.id, p_branch: branchId, p_qty: Number(qty), p_per: Math.round(perN * 1e6) / 1e6, p_note: '' });
     setBusy(false);
     if (error) return setErr(/function .*pour_between/i.test(error.message) ? 'Run security-patch-19.sql in Supabase first.' : error.message);
     setDone(data);
@@ -124,7 +155,16 @@ export default function PourStock({ branchId, onClose, onDone }) {
               <p className="small" style={{ marginTop: -4 }}>{num(have)} {u(srcCount.unit)} of {srcCount.name} in stock.</p>
               <div className="field"><span>Pour into</span>
                 {targets.length === 0
-                  ? <p className="small muted" style={{ margin: 0 }}>No other item called “{src.name.replace(/\s*\([^)]*\)/g, '')}” with its own stock. Add the display bottle or decant under Products with the same name.</p>
+                  ? (decant ? (
+                    <div className="card" style={{ padding: 12, margin: 0 }}>
+                      <p className="small" style={{ marginTop: 0 }}>No decant of {src.name} yet. Make one:</p>
+                      <div className="row">
+                        <label className="field grow" style={{ margin: 0 }}><span>ml in each</span><input className="input" inputMode="decimal" value={mk.ml} onChange={(e) => setMk({ ...mk, ml: e.target.value })} /></label>
+                        <label className="field grow" style={{ margin: 0 }}><span>Price of one</span><input className="input" inputMode="decimal" value={mk.price} onChange={(e) => setMk({ ...mk, price: e.target.value })} /></label>
+                      </div>
+                      <button type="button" className="btn small primary" style={{ marginTop: 10 }} disabled={busy} onClick={makeDecant}>Add {src.name.replace(/\s*\([^)]*\)/g, '').trim()} decant {mk.ml || '?'}ml</button>
+                    </div>
+                  ) : <p className="small muted" style={{ margin: 0 }}>No other item called “{src.name.replace(/\s*\([^)]*\)/g, '')}” with its own stock. Add the display bottle under Products with the same name.</p>)
                   : (
                     <div className="segs" role="radiogroup" aria-label="Pour into" style={{ margin: 0, flexWrap: 'wrap' }}>
                       {targets.map((t) => (
@@ -138,6 +178,16 @@ export default function PourStock({ branchId, onClose, onDone }) {
 
           {src && dst && (
             <>
+              {decant ? (
+              <div className="row">
+                <label className="field grow"><span>Bottles opened</span>
+                  <input className="input" inputMode="decimal" value={bottles} onChange={(e) => setBottles(e.target.value)} style={{ fontSize: 22, fontWeight: 800 }} />
+                </label>
+                <label className="field grow"><span>Decants made</span>
+                  <input className="input" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="10" style={{ fontSize: 22, fontWeight: 800 }} />
+                </label>
+              </div>
+              ) : (
               <div className="row">
                 <label className="field grow"><span>How many {u(dst.unit)}?</span>
                   <input className="input" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder={dst.unit === 'ml' ? '150' : '10'} style={{ fontSize: 22, fontWeight: 800 }} />
@@ -148,12 +198,15 @@ export default function PourStock({ branchId, onClose, onDone }) {
                   </label>
                 )}
               </div>
+              )}
               {Number(qty) > 0 && perN > 0 && (
                 <p className="small" style={{ marginTop: -4 }}>
-                  Takes {num(need)} {u(src.unit)} from {src.name}, adds {num(Number(qty))} {u(dst.unit)} to {dst.name}.
+                  {decant
+                    ? <>Takes {num(Number(bottles))} bottle{Number(bottles) === 1 ? '' : 's'} of {src.name}, adds {num(Number(qty))} decants.</>
+                    : <>Takes {num(need)} {u(src.unit)} from {src.name}, adds {num(Number(qty))} {u(dst.unit)} to {dst.name}.</>}
                 </p>
               )}
-              {short && <div className="err">Only {num(have)} {u(srcCount.unit)} left. Lower the amount.</div>}
+              {short && <div className="err">Only {num(have)} {decant ? 'bottles' : u(srcCount.unit)} left. Lower the amount.</div>}
             </>
           )}
           {err && <div className="err" role="alert">{err}</div>}

@@ -563,7 +563,7 @@ export default function POS() {
         </CameraScanner>
       )}
 
-      {pour && <PourStock branchId={branchId} onClose={() => { setPour(false); loadStock(); }} />}
+      {pour && <PourStock branchId={branchId} businessId={business.id} onClose={() => { setPour(false); loadStock(); }} />}
       {eSend && (
         <EReceiptSend
           business={business}

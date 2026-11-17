@@ -216,7 +216,7 @@ export default function Stock() {
         {moves.length === 0 && <p className="muted" style={{ margin: 0 }}>No changes yet.</p>}
       </div>
 
-      {pour && <PourStock branchId={branchId} onClose={() => { setPour(false); load(); }} />}
+      {pour && <PourStock branchId={branchId} businessId={business.id} onClose={() => { setPour(false); load(); }} />}
       {reorder && (
         <Reorder business={business} isOwner={profile.role === 'owner'} onClose={() => setReorder(false)} onSaved={reload}
           items={products.map((p) => ({ ...p, qty: stock[p.id] ?? 0 })).filter((p) => p.qty <= Number(p.low_stock_level)).sort((a, b) => a.qty - b.qty)} />
