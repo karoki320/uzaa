@@ -16,7 +16,9 @@ export default function BillingBanner({ role }) {
   if (st.state === 'unpaid' && role !== 'owner') return null;
   const owner = role === 'owner';
   const text = st.state === 'due'
-    ? `Your Uzaa subscription renews in ${st.left} day${st.left === 1 ? '' : 's'}.`
+    ? st.trial
+      ? `Your free Uzaa trial ends ${st.left === 0 ? 'today' : `in ${st.left} day${st.left === 1 ? '' : 's'}`}. Pay to keep selling.`
+      : `Your Uzaa subscription renews ${st.left === 0 ? 'today' : `in ${st.left} day${st.left === 1 ? '' : 's'}`}.`
     : st.state === 'grace'
       ? `Your Uzaa payment is ${st.overdue} day${st.overdue === 1 ? '' : 's'} overdue. Selling locks in ${st.lockIn} day${st.lockIn === 1 ? '' : 's'}.`
       : 'Your Uzaa subscription is not paid yet.';

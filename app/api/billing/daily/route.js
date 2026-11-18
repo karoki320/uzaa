@@ -21,7 +21,7 @@ export async function GET(req) {
   const out = { charged: 0, failed: 0, locked: 0, reminded: 0 };
 
   const { data: subs } = await sb.from('subscriptions')
-    .select('business_id,plan,fee,currency,paid_until,auto_renew,card_auth,card_email,last_auto_try,setup_paid,setup_fee')
+    .select('business_id,plan,fee,period,currency,paid_until,auto_renew,card_auth,card_email,last_auto_try,setup_paid,setup_fee,trial_ends')
     .gt('fee', 0).not('paid_until', 'is', null);
   const ids = (subs || []).map((s) => s.business_id);
   const { data: bizs } = ids.length ? await sb.from('businesses').select('id,status').in('id', ids) : { data: [] };
@@ -56,8 +56,11 @@ export async function GET(req) {
     // 3. reminders (a saved card that will be charged gets a gentler note)
     const auto = s.auto_renew && s.card_auth;
     let msg = null;
-    if (left === 5 || left === 1) msg = auto ? null : { title: `Uzaa renews in ${left} day${left === 1 ? '' : 's'}`, body: `${s.plan}: ${money(s.fee, s.currency)} due on ${longDate(s.paid_until)}. Pay with M-Pesa or card under Billing.` };
-    else if (left === 0) msg = auto ? null : { title: 'Uzaa renewal due today', body: `Pay ${money(s.fee, s.currency)} under Billing to keep selling without interruption.` };
+    const ahead = s.trial_ends ? [3, 1] : s.period === 'week' ? [2] : [5, 1];
+    if (ahead.includes(left)) msg = auto ? null : s.trial_ends
+      ? { title: `Your free Uzaa trial ends in ${left} day${left === 1 ? '' : 's'}`, body: `Keep selling: pay ${money(s.fee, s.currency)} under Billing with M-Pesa or card. Weekly, monthly or every 3 months.` }
+      : { title: `Uzaa renews in ${left} day${left === 1 ? '' : 's'}`, body: `${s.plan}: ${money(s.fee, s.currency)} due on ${longDate(s.paid_until)}. Pay with M-Pesa or card under Billing.` };
+    else if (left === 0) msg = auto ? null : { title: s.trial_ends ? 'Your free Uzaa trial ends today' : 'Uzaa renewal due today', body: `Pay ${money(s.fee, s.currency)} under Billing to keep selling without interruption.` };
     else if (left < 0 && st === 'active') {
       const lockIn = GRACE_DAYS + left + 1;
       if (lockIn === GRACE_DAYS || lockIn === 3 || lockIn === 1) msg = { title: 'Uzaa payment overdue', body: `Your till locks in ${lockIn} day${lockIn === 1 ? '' : 's'} unless you renew. Pay under Billing.` };

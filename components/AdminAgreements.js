@@ -14,7 +14,7 @@ export const AGR = {
 };
 
 const today = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
-const TERMS0 = { plan: 'Uzaa POS Standard', setup_fee: '', fee: '', period: 'month', start_date: '', term_months: 12, branches: 1, notice_days: 30, payment: '', special: '' };
+const TERMS0 = { plan: 'Uzaa POS Standard', setup_fee: '', fee: '2500', period: 'quarter', start_date: '', term_months: 12, branches: 1, notice_days: 30, payment: '', special: '' };
 
 // The last terms used are remembered on this device to save typing for the next client.
 function savedTerms() {
@@ -61,7 +61,7 @@ function AgreementFields({ value, onChange, allowNone }) {
             <label className="field"><span>Set-up fee (KES, once)</span><input className="input" inputMode="decimal" value={v.terms.setup_fee} onChange={set('setup_fee')} placeholder="0" /></label>
             <label className="field"><span>Subscription (KES)</span><input className="input" inputMode="decimal" required value={v.terms.fee} onChange={set('fee')} placeholder="1500" /></label>
             <label className="field"><span>Billed every</span>
-              <select className="input" value={v.terms.period} onChange={set('period')}><option value="month">Month</option><option value="quarter">Quarter (3 months)</option><option value="year">Year</option></select>
+              <select className="input" value={v.terms.period} onChange={set('period')}><option value="week">Week</option><option value="month">Month</option><option value="quarter">Quarter (3 months)</option><option value="year">Year</option></select>
             </label>
             <label className="field"><span>Start date</span><input className="input" type="date" value={v.terms.start_date} onChange={set('start_date')} /></label>
             <label className="field"><span>Minimum term (months)</span><input className="input" type="number" min="1" max="60" value={v.terms.term_months} onChange={set('term_months')} /></label>

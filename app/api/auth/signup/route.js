@@ -18,7 +18,10 @@ export async function POST(req) {
   const ereceipt = b.ereceipt === true;
   const ereceipt_whatsapp = String(b.ereceipt_whatsapp || '').trim().slice(0, 20);
   if (ereceipt && !waLink(ereceipt_whatsapp)) return bad('Enter the WhatsApp number your e-receipts come from, like 0722 000 111');
-  const extra = ereceipt ? { ereceipt, ereceipt_whatsapp } : {};
+  // How they start: a free trial (default) or paying now, and how often they will pay.
+  const start = b.start === 'pay' ? 'pay' : 'trial';
+  const period = ['week', 'month', 'quarter'].includes(b.period) ? b.period : 'quarter';
+  const extra = { start, period, ...(ereceipt ? { ereceipt, ereceipt_whatsapp } : {}) };
 
   const sb = await userClient();
 

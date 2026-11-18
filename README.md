@@ -69,3 +69,15 @@ How it works:
 - Each day at 08:00 (`/api/billing/daily`, see `vercel.json`), Uzaa charges saved cards that are due. It reminds owners by phone alert 5 days and 1 day before the due date and on the day, and again while they are overdue. A business more than 7 days overdue is locked (`lapsed`): nobody can sell, and the owner sees **Pay and unlock**. Its data is kept. A payment unlocks it immediately.
 - The super admin sees a Billing column and a **Billing** button for each business. Use it to set the price for clients without a generated agreement, or to record a payment made outside Paystack by moving "Paid up to" forward. A business with no paid-up date is never locked.
 - A payment only counts once Paystack confirms it to our server, either through the return page or the webhook. The amount and currency are checked against what was asked.
+
+### Price list and self sign-up (patch 20)
+
+Run `supabase/security-patch-20.sql` (or `apply-all.sql`) once.
+
+- The prices live in `lib/plans.js`. Uzaa POS Standard costs KES 250 a week, KES 900 a month or KES 2,500 every 3 months. Change them there.
+- At `/signup` the client chooses how to start and how often they pay (weekly, monthly or every 3 months):
+  - **Free for 7 days** (`TRIAL_DAYS`): the business is active at once. When the trial ends, the usual reminders, 7-day grace and lock apply.
+  - **Pay now**: the business waits as *pending*. The owner sees a "Pay to start" screen with the price and a Pay button, and the business switches on when Paystack confirms. If they leave without paying, that screen also offers the free trial, once. Clients on a signed agreement never get the trial option.
+- Owners on the price list can switch between weekly, monthly and every 3 months under Billing. The change applies from their next payment.
+- A client the admin prices by hand keeps that price, and only the admin can change it. In the admin Billing box, a client is on the price list when the plan name is "Uzaa POS Standard" and the amount equals a list price.
+- Clients that already existed before patch 20 are not touched. Set their billing from the admin page.

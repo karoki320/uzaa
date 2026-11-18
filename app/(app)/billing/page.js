@@ -4,7 +4,8 @@ import { post } from '@/lib/api';
 import { money, fmtDate } from '@/lib/util';
 import PayButton from '@/components/PayButton';
 
-const PER = { month: 'month', quarter: 'quarter (3 months)', year: 'year' };
+import { PER } from '@/lib/plans';
+const CHOICE = { week: 'Weekly', month: 'Monthly', quarter: 'Every 3 months' };
 const long = (d) => (d ? new Intl.DateTimeFormat('en-KE', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${d}T00:00:00Z`)) : '');
 const KIND = { first: 'Set-up and first period', renewal: 'Renewal', auto: 'Automatic card renewal' };
 
@@ -22,6 +23,12 @@ export default function Billing() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  async function setPeriod(period) {
+    const r = await post('/api/billing', { action: 'period', period });
+    if (!r.ok) return alert(r.data.error || 'Could not change how often you pay');
+    load();
+  }
+
   async function cardOff() {
     if (!window.confirm('Stop automatic renewals and remove the saved card? You will pay each renewal yourself.')) return;
     const r = await post('/api/billing', { action: 'card_off' });
@@ -38,8 +45,8 @@ export default function Billing() {
 
   const label = {
     unpaid: <span className="badge amber">Not paid yet</span>,
-    ok: <span className="badge">Paid up</span>,
-    due: <span className="badge amber">Due in {st.left} day{st.left === 1 ? '' : 's'}</span>,
+    ok: <span className="badge">{st.trial ? 'Free trial' : 'Paid up'}</span>,
+    due: <span className="badge amber">{st.trial ? 'Trial ends' : 'Due'} in {st.left} day{st.left === 1 ? '' : 's'}</span>,
     grace: <span className="badge red">Overdue: locks in {st.lockIn} day{st.lockIn === 1 ? '' : 's'}</span>,
     lapsed: <span className="badge red">Locked: unpaid</span>,
   }[st.state];
@@ -50,15 +57,29 @@ export default function Billing() {
       {d.test && <div className="note small">Test mode: payments here are not real. Use Paystack test cards or test M-Pesa numbers.</div>}
       <div className="grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 14 }}>
         <div className="kpi"><div className="l">Plan</div><div className="v" style={{ fontSize: 20 }}>{sub.plan}</div><div className="s">{money(sub.fee, sub.currency)} per {PER[sub.period]}</div></div>
-        <div className="kpi"><div className="l">Paid up to</div><div className="v" style={{ fontSize: 20 }}>{sub.paid_until ? long(sub.paid_until) : 'Not yet'}</div><div className="s">{label}</div></div>
+        <div className="kpi"><div className="l">{sub.trial_ends ? 'Free trial until' : 'Paid up to'}</div><div className="v" style={{ fontSize: 20 }}>{sub.paid_until ? long(sub.paid_until) : 'Not yet'}</div><div className="s">{label}</div></div>
         <div className="kpi"><div className="l">Renewal</div><div className="v" style={{ fontSize: 20 }}>{sub.auto_renew ? 'Automatic' : 'Pay each time'}</div><div className="s">{sub.auto_renew ? sub.card_label : 'M-Pesa or card'}</div></div>
       </div>
 
+      {sub.can_switch && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <h3 style={{ marginTop: 0 }}>How often you pay</h3>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {Object.entries(sub.prices).map(([p, amt]) => (
+              <button key={p} className={`btn ${sub.period === p ? 'primary' : ''}`} onClick={() => sub.period !== p && setPeriod(p)} aria-pressed={sub.period === p}>
+                {CHOICE[p] || p}: {money(amt, sub.currency)}
+              </button>
+            ))}
+          </div>
+          <p className="small muted" style={{ marginBottom: 0 }}>A change applies from your next payment. Every 3 months works out cheapest.</p>
+        </div>
+      )}
+
       <div className="card" style={{ marginBottom: 14 }}>
-        <h3 style={{ marginTop: 0 }}>{sub.paid_until ? 'Renew now' : 'Pay to get started'}</h3>
+        <h3 style={{ marginTop: 0 }}>{sub.trial_ends ? 'Pay to keep using Uzaa after your trial' : sub.paid_until ? 'Renew now' : 'Pay to get started'}</h3>
         <p className="small muted" style={{ marginTop: 0 }}>
           {money(sub.next.amount, sub.currency)}{sub.next.setup ? ` (set-up fee ${money(sub.setup_fee, sub.currency)} + first ${PER[sub.period]})` : ` for one ${PER[sub.period]}`}.
-          {sub.paid_until && (st.state === 'ok' || st.state === 'due') ? ` Paying now adds one ${PER[sub.period]} after ${long(sub.paid_until)}, so you lose nothing by paying early.` : ''}
+          {sub.paid_until && (st.state === 'ok' || st.state === 'due') ? ` Paying now adds one ${PER[sub.period]} after ${long(sub.paid_until)}, so you lose nothing by paying early${sub.trial_ends ? ' and keep your free days' : ''}.` : ''}
           {st.state === 'lapsed' ? ' Uzaa unlocks as soon as the payment is confirmed.' : ''}
         </p>
         {d.online

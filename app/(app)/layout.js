@@ -12,6 +12,7 @@ import AcceptTerms from '@/components/AcceptTerms';
 import InstallBanner from '@/components/InstallBanner';
 import BillingBanner from '@/components/BillingBanner';
 import PayButton from '@/components/PayButton';
+import StartBilling from '@/components/StartBilling';
 import { listQueue } from '@/lib/offline';
 
 const NAV = [
@@ -109,9 +110,10 @@ export default function Shell({ children }) {
             {!profile.active
               ? 'Your account has been disabled. Please contact your business owner.'
               : business?.status === 'pending'
-                ? 'Your Uzaa account is set up and waiting to be activated. If you were sent a service agreement, sign it and pay from the link you received: your account switches on as soon as the payment is confirmed.'
+                ? 'Your Uzaa account is set up. It switches on as soon as your first payment is confirmed. If you were sent a service agreement, sign it and pay from the link you received.'
                 : 'This business account is suspended. Please contact Uzaa support.'}
           </p>
+          {profile.active && business?.status === 'pending' && profile.role === 'owner' && <StartBilling onStarted={reload} />}
           <button className="btn" onClick={signOut}>Sign out</button>
         </div>
       </div>

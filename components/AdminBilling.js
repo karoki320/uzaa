@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { post } from '@/lib/api';
 import { money, fmtDate } from '@/lib/util';
 import Modal from '@/components/Modal';
+import { PLANS, PER_SHORT } from '@/lib/plans';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const daysTo = (d) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 864e5);
@@ -10,8 +11,8 @@ const daysTo = (d) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${t
 /** Short billing status for the businesses table. */
 export function BillingCell({ sub }) {
   if (!sub || !(Number(sub.fee) > 0)) return <span className="small muted">Not set</span>;
-  const per = sub.period === 'quarter' ? 'qtr' : sub.period === 'year' ? 'yr' : 'mo';
-  const line = <div className="small muted">{money(sub.fee)}/{per}{sub.auto_renew ? ' · auto card' : ''}</div>;
+  const per = PER_SHORT[sub.period] || 'mo';
+  const line = <div className="small muted">{money(sub.fee)}/{per}{sub.auto_renew ? ' · auto card' : ''}{sub.trial_ends ? ' · free trial' : ''}</div>;
   if (!sub.paid_until) return <><span className="badge amber">Not paid</span>{line}</>;
   const left = daysTo(sub.paid_until);
   return (
@@ -47,7 +48,7 @@ export function BillingModal({ business, sub, payments, onClose, onDone }) {
         <div className="row" style={{ gap: 8 }}>
           <label className="grow">Subscription (KES)<input className="input" inputMode="decimal" value={f.fee} onChange={set('fee')} /></label>
           <label className="grow">Every
-            <select className="input" value={f.period} onChange={set('period')}><option value="month">Month</option><option value="quarter">Quarter (3 months)</option><option value="year">Year</option></select>
+            <select className="input" value={f.period} onChange={set('period')}><option value="week">Week</option><option value="month">Month</option><option value="quarter">Quarter (3 months)</option><option value="year">Year</option></select>
           </label>
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -58,6 +59,11 @@ export function BillingModal({ business, sub, payments, onClose, onDone }) {
           <label className="grow">Start date<input className="input" type="date" value={f.start_date || ''} onChange={set('start_date')} /></label>
           <label className="grow">Paid up to<input className="input" type="date" value={f.paid_until || ''} onChange={set('paid_until')} /></label>
         </div>
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Price list ({PLANS.standard.name}): KES {PLANS.standard.prices.week}/week, {PLANS.standard.prices.month}/month, {PLANS.standard.prices.quarter.toLocaleString()}/quarter.
+          With that plan name and a list price, the owner can switch between weekly, monthly and quarterly themselves.
+          {sub?.trial_ends ? ` On a free trial until ${fmtDate(sub.trial_ends)}.` : ''}
+        </p>
         <label>Billing email (receipts and Paystack)<input className="input" type="email" value={f.bill_email} onChange={set('bill_email')} /></label>
         {sub?.auto_renew && <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={f.stop_auto} onChange={set('stop_auto')} /> Remove their saved card ({sub.card_label})</label>}
         <p className="small muted">Leave &quot;Paid up to&quot; empty for a client who has not paid yet: they are never locked until a date is set. Set a date in the future to record a payment made outside Paystack; a locked business unlocks at once.</p>

@@ -2,6 +2,7 @@ import { bad, ok, adminClient, serverReady, sameOrigin, readJson, clientIp, logE
 import { hit } from '@/lib/ratelimit';
 import { tokenOk } from '@/lib/agreement';
 import { jpegSize } from '@/lib/pdf';
+import { PLANS, listPrice } from '@/lib/plans';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,10 +47,11 @@ export async function POST(req, { params }) {
   if (a.business_id && Number(t.fee) > 0) {
     await sb.from('subscriptions').upsert({
       business_id: a.business_id, agreement_id: a.id, plan: String(t.plan || 'Uzaa POS Standard').slice(0, 60),
-      fee: Number(t.fee), period: ['quarter', 'year'].includes(t.period) ? t.period : 'month',
+      fee: Number(t.fee), period: ['week', 'quarter', 'year'].includes(t.period) ? t.period : 'month',
       setup_fee: Number(t.setup_fee) || 0, currency: 'KES',
       start_date: /^\d{4}-\d{2}-\d{2}$/.test(String(t.start_date || '')) ? t.start_date : null,
       bill_email: String(a.client_email || '').toLowerCase(), updated_at: now,
+      plan_code: String(t.plan || '') === PLANS.standard.name && listPrice('standard', t.period) === Number(t.fee) ? 'standard' : '',
     }, { onConflict: 'business_id' });
   }
   return ok({ signed_at: now });
