@@ -113,7 +113,7 @@ export default async function EReceipt({ params }) {
           {items.map((it, i) => (
             <div className="er-row" key={i}>
               <div>{it.name}<div className="q">{n2(it.qty)}{it.unit && it.unit !== 'pc' ? ` ${it.unit}` : ''} × {n2(it.price)}</div></div>
-              <div>{n2(Number(it.qty) * Number(it.price))}</div>
+              <div>{Number(it.price) === 0 ? 'FREE' : n2(Number(it.qty) * Number(it.price))}</div>
             </div>
           ))}
         </section>

@@ -84,7 +84,7 @@ export async function GET(req) {
     ws.addRow({ no: Number(s.receipt_no), d: dFmt.format(dt), t: tFmt.format(dt), b: bn[s.branch_id] || '', c: pn[s.cashier_id] || '', pm: s.payments?.length ? s.payments.map((p) => `${p.method} ${Number(p.amount).toLocaleString('en-KE')}`).join(' + ') : s.payment_method || '',
       n: (s.sale_items || []).length, sub: Number(s.subtotal), dis: Number(s.discount), tax: Number(s.tax), tot: Number(s.total), paid: Number(s.amount_paid),
       // the items on this receipt, e.g. "2 x Ana Abiyedh @ 870; 30 ml x Kenya Love @ 33.33"
-      what: (s.sale_items || []).map((it) => `${qtyTxt(it)} x ${it.name} @ ${num(it.price)}`).join('; ') });
+      what: (s.sale_items || []).map((it) => `${qtyTxt(it)} x ${it.name} ${Number(it.price) === 0 ? '(free)' : `@ ${num(it.price)}`}`).join('; ') });
   });
   const last = sales.length + 1;
   const sum = (k) => sales.reduce((t, x) => t + Number(x[k] || 0), 0);

@@ -19,11 +19,12 @@ const toneFor = (k) => { let h = 0; for (const ch of String(k || '')) h = (h * 3
 const initialsOf = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 // only what the till needs: no cost prices, no timestamps (smaller download on every refresh)
-const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of,sell_without_stock';
+const TILL_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of,sell_without_stock,giveaway';
+const COLS_17 = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of,sell_without_stock';   // before patch 21
 const COLS_16 = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active,bulk_min,bulk_price,stock_of';   // before patch 17
 const OLD_COLS = 'id,name,barcode,category,price,unit,track_stock,low_stock_level,active';   // before patch 16
 // bulk price: from bulk_min (for example 50 ml) the whole line is charged at bulk_price
-const unitPrice = (c) => (Number(c.bmin) > 0 && c.bprice != null && c.qty >= Number(c.bmin) ? Number(c.bprice) : c.price);
+const unitPrice = (c) => (c.free ? 0 : Number(c.bmin) > 0 && c.bprice != null && c.qty >= Number(c.bmin) ? Number(c.bprice) : c.price);
 
 export default function POS() {
   const { profile, business, branches, session } = useAuth();
@@ -80,6 +81,7 @@ export default function POS() {
     if (saved) { setProducts((cur) => (cur.length ? cur : saved)); setFromCopy(true); }
     if (!navigator.onLine) return;
     let { data, error } = await supabase.from('products').select(TILL_COLS).eq('active', true).order('name').range(0, 4999);
+    if (error && error.code === '42703') ({ data, error } = await supabase.from('products').select(COLS_17).eq('active', true).order('name').range(0, 4999));
     if (error && error.code === '42703') ({ data, error } = await supabase.from('products').select(COLS_16).eq('active', true).order('name').range(0, 4999));
     if (error && error.code === '42703') ({ data, error } = await supabase.from('products').select(OLD_COLS).eq('active', true).order('name').range(0, 4999));
     if (!error && data) { setProducts(data); setFromCopy(false); saveKv('products', data.map(strip)); }
@@ -159,12 +161,40 @@ export default function POS() {
       const i = c.findIndex((x) => x.id === p.id);
       if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: Math.round((x.qty + stepFor(x.unit)) * 1000) / 1000, qs: undefined } : x));
       const unit = p.unit || 'pc';
-      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: stepFor(unit) === 1 ? 1 : 1, unit, track: sr.track, sid: sr.id, allow: sr.allow,
+      return [...c, { id: p.id, name: p.name, price: Number(p.price), qty: stepFor(unit) === 1 ? 1 : 1, unit, track: sr.track, sid: sr.id, allow: sr.allow, pack: !!p.giveaway,
         bmin: p.bulk_min != null ? Number(p.bulk_min) : null, bprice: p.bulk_price != null ? Number(p.bulk_price) : null }];
     });
     setErr('');
     return true;
   }
+
+  // a free item with the sale (an empty bottle with perfume oil). Its own line, at 0, still taken off stock.
+  const giveaways = products.filter((p) => p.giveaway);
+  const [freePick, setFreePick] = useState(false);
+  function addFree(p, n = 1) {
+    const sr = stockRef(p);
+    const key = `${p.id}:free`;
+    const inSale = cartNow.current;
+    const mine = inSale.find((x) => x.id === key)?.qty || 0;
+    const room = roomFor(sr, inSale, key);
+    if (mine + n > room + 1e-9) { setErr(outMsg(p.name, room, p.unit)); return false; }
+    setCart((c) => {
+      const i = c.findIndex((x) => x.id === key);
+      if (i >= 0) return c.map((x, j) => (j === i ? { ...x, qty: x.qty + n, qs: undefined } : x));
+      return [...c, { id: key, pid: p.id, free: true, name: p.name, price: 0, qty: n, unit: p.unit || 'pc', track: sr.track, sid: sr.id, allow: sr.allow, bmin: null, bprice: null }];
+    });
+    setErr('');
+    return true;
+  }
+  // bottles sold to wholesalers by the half dozen or dozen
+  const setPack = (id, n) => {
+    const it = cartNow.current.find((x) => x.id === id);
+    if (!it) return;
+    const room = roomFor({ id: it.sid || it.id, track: it.track, allow: it.allow }, cartNow.current, id);
+    if (n > room + 1e-9) return setErr(outMsg(it.name, room, it.unit));
+    setErr('');
+    setCart((c) => c.map((x) => (x.id === id ? { ...x, qty: n, qs: undefined } : x)));
+  };
 
   function onSearchKey(e) {
     if (e.key !== 'Enter') return;
@@ -218,7 +248,8 @@ export default function POS() {
     setCart((c) => c.map((x) => (x.id === id ? { ...x, qs: v, qty: Number(v) || 0 } : x)));
   };
 
-  const sub = priced.reduce((s, c) => s + c.qty * c.price, 0);
+  // each line to the cent, as the database does (12 bottles at 170/12 each = 170.00)
+  const sub = priced.reduce((s, c) => s + Math.round(c.qty * c.price * 100) / 100, 0);
   const disc = Math.min(Number(discount) || 0, sub);
   const rate = Number(business.tax_rate) || 0;
   const tax = Math.round((sub - disc) * rate) / 100;
@@ -280,7 +311,7 @@ export default function POS() {
       id: crypto.randomUUID(),          // one id per sale: the server never records the same sale twice
       user_id: session?.user?.id,
       branch_id: branchId,
-      items: items.map((c) => ({ id: c.id, name: c.name, qty: c.qty, price: c.price, unit: c.unit })),
+      items: items.map((c) => ({ id: c.pid || c.id, name: c.name, qty: c.qty, price: c.price, unit: c.unit, ...(c.free ? { free: true } : {}) })),
       method: isSplit ? 'Split' : method,
       payments: isSplit ? parts : null,
       paid: isSplit ? partSum : isCredit ? paidNum : isCash && paid === '' ? total : paidNum,
@@ -311,7 +342,7 @@ export default function POS() {
 
     const args = {
       p_branch: branchId,
-      p_items: items.map((c) => ({ product_id: c.id, qty: c.qty })),
+      p_items: items.map((c) => ({ product_id: c.pid || c.id, qty: c.qty, ...(c.free ? { free: true } : {}) })),
       p_payment: sale.method,
       p_paid: sale.paid,
       p_discount: disc,
@@ -459,10 +490,16 @@ export default function POS() {
               {priced.map((c) => (
                 <div key={c.id} className="cart-line">
                   <div className="nm">
-                    <b>{c.name}</b>
-                    <div className="small muted">{money(c.price, cur)} per {c.unit && c.unit !== 'pc' ? c.unit : 'item'}
+                    <b>{c.name}{c.free && <span className="badge" style={{ marginLeft: 6, background: 'var(--c-teal)', fontSize: 11 }}>FREE</span>}</b>
+                    {c.pack && !c.free && (
+                      <div style={{ display: 'flex', gap: 4, margin: '3px 0' }}>
+                        <button type="button" className="btn small" style={{ minHeight: 30, padding: '0 10px', fontSize: 12 }} onClick={() => setPack(c.id, 6)}>½ dozen</button>
+                        <button type="button" className="btn small" style={{ minHeight: 30, padding: '0 10px', fontSize: 12 }} onClick={() => setPack(c.id, 12)}>Dozen</button>
+                      </div>
+                    )}
+                    {!c.free && <div className="small muted">{money(c.price, cur)} per {c.unit && c.unit !== 'pc' ? c.unit : 'item'}
                       {c.price !== c.base ? <span className="ok"> (bulk price from {num(c.bmin)}{lbl(c.unit)})</span>
-                        : Number(c.bmin) > 0 && c.bprice != null ? <span> ({money(c.bprice, cur)} from {num(c.bmin)}{lbl(c.unit)})</span> : null}</div>
+                        : Number(c.bmin) > 0 && c.bprice != null ? <span> ({money(c.bprice, cur)} from {num(c.bmin)}{lbl(c.unit)})</span> : null}</div>}
                     {c.track && (stock[c.sid || c.id] ?? 0) < c.qty && <div className="small warn">Only {num(stock[c.sid || c.id] ?? 0)}{lbl(c.unit)} in stock</div>}
                   </div>
                   <div className="qty">
@@ -470,10 +507,30 @@ export default function POS() {
                     <input className="input" inputMode="decimal" value={c.qs ?? c.qty} onChange={(e) => typeQty(c.id, e.target.value)} aria-label={`Quantity${c.unit && c.unit !== 'pc' ? ' in ' + c.unit : ''}`} />
                     <button onClick={() => setQty(c.id, 1)} aria-label="More">+</button>
                   </div>
-                  <b className="lt">{money(c.qty * c.price, cur)}</b>
+                  <b className="lt">{c.free ? 'Free' : money(Math.round(c.qty * c.price * 100) / 100, cur)}</b>
                 </div>
               ))}
             </div>
+            {giveaways.length > 0 && (
+              freePick ? (
+                <div className="splitbox" style={{ marginTop: 6 }}>
+                  <div className="row between small"><b>Add a free bottle</b><button type="button" className="btn small" onClick={() => setFreePick(false)}>Done</button></div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {giveaways.map((g) => {
+                      const sr = stockRef(g);
+                      const left = sr.track ? stock[sr.id] ?? 0 : null;
+                      return (
+                        <button type="button" key={g.id} className="btn small" onClick={() => addFree(g)} disabled={left !== null && left <= 0 && !sr.allow}>
+                          + {g.name}{left !== null ? <span className="muted" style={{ fontWeight: 600 }}> ({num(left)})</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className="btn small" style={{ marginTop: 6 }} onClick={() => setFreePick(true)}>+ Add free bottle</button>
+              )
+            )}
 
             {(methods.length > 1 || splitMethods.length > 1) && <div className="pay">
               {methods.map((m) => (

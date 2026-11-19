@@ -177,6 +177,8 @@ export default function Products() {
     };
     // stop at zero (only once the database has the column: security-patch-17.sql)
     if (hasSws) payload.sell_without_stock = !!edit.sell_without_stock;
+    // can be given free at the till (patch 21)
+    if (hasGive) payload.giveaway = !!edit.giveaway;
     // bulk price and shared stock (only once the database has the columns: security-patch-16.sql)
     if (hasNew) {
       const bm = Number(edit.bulk_min) || 0, bp = edit.bulk_price === '' || edit.bulk_price == null ? null : Number(edit.bulk_price);
@@ -246,6 +248,7 @@ export default function Products() {
   };
   const ids = picked ? [...picked] : [];
   // the database has the "sell even when out of stock" setting (patch 17)
+  const hasGive = rows.some((r) => Object.prototype.hasOwnProperty.call(r, 'giveaway'));
   const hasSws = rows.some((r) => Object.prototype.hasOwnProperty.call(r, 'sell_without_stock'));
   async function bulkSws(on) {
     setRows((list) => list.map((r) => (picked.has(r.id) ? { ...r, sell_without_stock: on } : r)));
@@ -470,6 +473,19 @@ export default function Products() {
                       : 'Off: the till stops selling this when the stock reaches 0. Turn on for things you sell before counting them in.'}</span></span>
                 </label>
               </div>
+            )}
+            {hasGive && (
+              <label className="row" style={{ marginBottom: 14, alignItems: 'flex-start' }}>
+                <input type="checkbox" checked={!!edit.giveaway} onChange={set('giveaway')} style={{ marginTop: 4 }} />
+                <span><b>Can be given free at the till</b><br /><span className="small muted">For example empty oil bottles: retail customers get one free with their oil (Add free bottle on the till), wholesalers still buy them at this price.</span></span>
+              </label>
+            )}
+            {hasGive && edit.giveaway && (
+              <label className="field"><span>Price for a dozen (sets the price of one, so half a dozen is exactly half)</span>
+                <input className="input" inputMode="decimal" placeholder="e.g. 170"
+                  value={edit.dozen ?? (Number(edit.price) > 0 ? String(Math.round(Number(edit.price) * 12 * 100) / 100) : '')}
+                  onChange={(e) => { const v = e.target.value; setEdit({ ...edit, dozen: v, price: Number(v) > 0 ? String(Math.round((Number(v) / 12) * 1e6) / 1e6) : edit.price }); }} />
+              </label>
             )}
             {hasNew && !edit.track_stock && (
               <label className="field"><span>Sell from the stock of (optional)</span>
