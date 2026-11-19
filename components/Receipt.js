@@ -31,9 +31,11 @@ export default function Receipt({ business, branch, sale, items, cashier }) {
         ))}
         <hr />
         <div className="ln"><span>Subtotal</span><span>{num(sale.subtotal)}</span></div>
-        {Number(sale.discount) > 0 && <div className="ln"><span>Discount</span><span>-{num(sale.discount)}</span></div>}
+        {Number(sale.discount) - Number(sale.points_value || 0) > 0.004 && <div className="ln"><span>Discount</span><span>-{num(Number(sale.discount) - Number(sale.points_value || 0))}</span></div>}
+        {Number(sale.points_value) > 0 && <div className="ln"><span>Points used ({num(sale.points_used)})</span><span>-{num(sale.points_value)}</span></div>}
         {Number(sale.tax) > 0 && <div className="ln"><span>Tax ({num(business?.tax_rate)}%)</span><span>{num(sale.tax)}</span></div>}
         <div className="ln"><b>TOTAL {cur}</b><b>{num(sale.total)}</b></div>
+        {Number(sale.points_earned) > 0 && <div className="ln"><span>Points earned</span><span>{num(sale.points_earned)}</span></div>}
         <hr />
         {sale.payments?.length
           ? <>{payLines(sale).map((p) => <div className="ln" key={p.method}><span>Paid by {p.method}</span><span>{num(p.amount)}</span></div>)}

@@ -21,6 +21,7 @@ const NAV = [
   { href: '/sales', label: 'Sales', roles: ['owner', 'manager', 'cashier'] },
   { href: '/products', label: 'Products', roles: ['owner', 'manager', 'cashier'] },
   { href: '/stock', label: 'Stock', roles: ['owner', 'manager'] },
+  { href: '/customers', label: 'Customers', roles: ['owner', 'manager'], feature: 'loyalty' },
   { href: '/credit', label: 'Credit', roles: ['owner', 'manager', 'cashier'] },
   { href: '/expenses', label: 'Expenses', roles: ['owner', 'manager', 'cashier'] },
   { href: '/reports', label: 'Reports', roles: ['owner', 'manager'] },
@@ -45,7 +46,7 @@ export default function Shell({ children }) {
     if (ok === false) window.alert('You are offline. Signing out needs internet. You are still signed in and nothing was lost.');
   };
 
-  const items = profile ? NAV.filter((n) => n.roles.includes(profile.role)) : [];
+  const items = profile ? NAV.filter((n) => n.roles.includes(profile.role) && (!n.feature || business?.features?.[n.feature])) : [];
   const allowed = items.some((n) => path.startsWith(n.href));
 
   useEffect(() => {

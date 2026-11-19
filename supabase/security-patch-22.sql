@@ -134,7 +134,8 @@ begin
     if not exists (select 1 from customers where id = p_customer and business_id = bid and active) then raise exception 'Unknown customer'; end if;
     if off then raise exception 'Credit sales need a connection'; end if;
   elsif p_customer is not null and not exists (select 1 from customers where id = p_customer and business_id = bid) then
-    raise exception 'Unknown customer';
+    -- an offline sale is never lost because its customer was removed while it waited to upload
+    if off then p_customer := null; else raise exception 'Unknown customer'; end if;
   end if;
   -- loyalty points (patch 22): on when the super admin gave the business the feature and the owner switched it on
   select coalesce((features->>'loyalty')::boolean, false) and coalesce(loyalty_enabled, false),

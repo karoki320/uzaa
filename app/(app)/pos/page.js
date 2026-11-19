@@ -12,6 +12,7 @@ import CameraScanner from '@/components/CameraScanner';
 import { findByBarcode } from '@/lib/barcode';
 import EReceiptSend from '@/components/EReceiptSend';
 import PourStock from '@/components/PourStock';
+import { loyaltyOn, pointsWorth } from '@/lib/loyalty';
 
 // each category gets its own pastel tile colour, so the till is quick to read at a glance
 const TILE_TONES = ['var(--c-teal)', 'var(--c-ice)', 'var(--c-lav)', 'var(--c-amber)', 'var(--c-peach)', 'var(--c-pale)'];
@@ -55,6 +56,9 @@ export default function POS() {
   const [customers, setCustomers] = useState([]);
   const [customer, setCustomer] = useState(null);
   const [pick, setPick] = useState(false);
+  // loyalty points (patch 22): any sale can be tied to a customer, who earns points and can use them as money off
+  const loy = loyaltyOn(business);
+  const [usePts, setUsePts] = useState('');
   const [scan, setScan] = useState(false);
   const [scanOut, setScanOut] = useState(false);   // false: scanning adds to the sale, true: takes off
   const cartNow = useRef(cart);
@@ -171,6 +175,7 @@ export default function POS() {
   // a free item with the sale (an empty bottle with perfume oil). Its own line, at 0, still taken off stock.
   const giveaways = products.filter((p) => p.giveaway);
   const [freePick, setFreePick] = useState(false);
+  const [freeMsg, setFreeMsg] = useState('');   // why a free bottle could not be added (shown next to the buttons)
   function addFree(p, n = 1) {
     const sr = stockRef(p);
     const key = `${p.id}:free`;
@@ -251,9 +256,15 @@ export default function POS() {
   // each line to the cent, as the database does (12 bottles at 170/12 each = 170.00)
   const sub = priced.reduce((s, c) => s + Math.round(c.qty * c.price * 100) / 100, 0);
   const disc = Math.min(Number(discount) || 0, sub);
+  const ptsHave = Math.max(0, Math.trunc(Number(customer?.points) || 0));
+  const ptVal = Number(business.loyalty_point_value) || 0;
+  const ptsMin = Math.max(1, Number(business.loyalty_min_redeem) || 0);
+  const ptsMax = loy && customer && ptVal > 0 && ptsHave >= ptsMin ? Math.min(ptsHave, Math.floor((sub - disc) / ptVal + 1e-9)) : 0;
+  const ptsN = loy && customer ? Math.trunc(Number(usePts) || 0) : 0;
+  const ptsOff = Math.min(pointsWorth(ptsN, business), Math.max(0, sub - disc));
   const rate = Number(business.tax_rate) || 0;
-  const tax = Math.round((sub - disc) * rate) / 100;
-  const total = sub - disc + tax;
+  const tax = Math.round((sub - disc - ptsOff) * rate) / 100;
+  const total = sub - disc - ptsOff + tax;
   const isSplit = method === '__split';
   const isCash = method.toLowerCase() === 'cash';
   const isCredit = method.toLowerCase() === 'credit';
@@ -280,10 +291,12 @@ export default function POS() {
 
   // the list of people who may take goods on credit, loaded the first time it is needed
   useEffect(() => {
-    if (!isCredit || customers.length) return;
-    supabase.from('customer_debts').select('id,name,phone,balance,credit_limit').order('name').range(0, 999)
+    if (!(isCredit || loy) || customers.length) return;
+    (loy ? supabase.from('customer_list').select('id,name,phone,balance,credit_limit,points').eq('active', true)
+         : supabase.from('customer_debts').select('id,name,phone,balance,credit_limit'))
+      .order('name').range(0, 4999)
       .then(({ data }) => setCustomers(data || []));
-  }, [isCredit]); // eslint-disable-line
+  }, [isCredit, loy]); // eslint-disable-line
 
   async function charge(withPrint) {
     const items = priced.filter((c) => c.qty > 0);
@@ -304,6 +317,12 @@ export default function POS() {
       if (!customer) return setErr('Choose who is taking this on credit');
       if (offlineNow) return setErr('Credit sales need a connection. Use another payment method, or wait for the network.');
     }
+    if (ptsN > 0) {
+      if (offlineNow) return setErr('Using points needs a connection. Take the points off, or wait for the network.');
+      if (ptsN > ptsHave) return setErr(`${customer.name} has only ${ptsHave} points`);
+      if (ptsN < ptsMin) return setErr(`At least ${ptsMin} points are needed before they can be used`);
+      if (ptsN > ptsMax) return setErr(`Use at most ${ptsMax} points on this sale`);
+    }
     // the M-Pesa code is optional (a busy till cannot always wait for it); when typed it is kept with the sale
     setBusy(true);
     setErr('');
@@ -322,7 +341,7 @@ export default function POS() {
       at: new Date().toISOString(),
       status: 'queued',
     };
-    const finish = () => { setCart([]); setDiscount(''); setPaid(''); setQ(''); setRef(''); setCustomer(null); setSplit((x) => ({ ...x, vals: {}, auto: '' })); };
+    const finish = () => { setCart([]); setDiscount(''); setPaid(''); setQ(''); setRef(''); setCustomer(null); setUsePts(''); setSplit((x) => ({ ...x, vals: {}, auto: '' })); };
 
     // keep it on the phone: no signal, or the request failed on the way
     const keep = async () => {
@@ -350,6 +369,7 @@ export default function POS() {
       p_client_id: sale.id,
       p_customer: sale.customer_id,
       ...(sale.payments ? { p_payments: sale.payments } : {}),   // only sent for a split, so the till works before patch 15
+      ...(ptsN > 0 ? { p_redeem: ptsN } : {}),                     // only sent when points are used, so the till works before patch 22
     };
     // one trip: record the sale and get its receipt number back together (create_sale_fast).
     // Falls back to the old two-step way if the database patch has not been run yet.
@@ -362,6 +382,7 @@ export default function POS() {
     if (error) {
       if (isNetwork(error, status) || status === 401) { sale.offlineTried = true; return keep(); }   // the sale may or may not have arrived; the id makes a re-send safe
       setBusy(false);
+      if (ptsN > 0 && (error.code === 'PGRST202' || /p_redeem/.test(error.message || ''))) return setErr('Loyalty points are not switched on yet: run security-patch-22.sql in Supabase.');
       if (sale.payments && (error.code === 'PGRST202' || /p_payments/.test(error.message || ''))) return setErr('Split payments are not switched on yet: the owner needs to run security-patch-15.sql in Supabase.');
       return setErr(error.message);
     }
@@ -378,7 +399,8 @@ export default function POS() {
     setBusy(false);
     setTimeout(() => { loadStock(); syncQueue(session?.user?.id); }, 1500);   // also sends anything that was waiting
     post('/api/push/sale', { sale_id: id });   // the owner's phone, if they asked for it
-    const info = { id, no: row?.receipt_no, total: row?.total, at: new Date().toISOString(), phone: customer?.phone || '', cname: customer?.name || '', change: Math.max(0, Number(row?.amount_paid || 0) - Number(row?.total || 0)), url: '', failed: false };
+    if (sale.customer_id && row?.points != null) setCustomers((l) => l.map((c) => (c.id === sale.customer_id ? { ...c, points: row.points } : c)));
+    const info = { id, earned: Number(row?.points_earned) || 0, pts: row?.points ?? null, no: row?.receipt_no, total: row?.total, at: new Date().toISOString(), phone: customer?.phone || '', cname: customer?.name || '', change: Math.max(0, Number(row?.amount_paid || 0) - Number(row?.total || 0)), url: '', failed: false };
     setFlash(info);
     if (withPrint) {
       const r = await post('/api/print/link', { sale_id: id, width: paperWidth() });
@@ -474,6 +496,7 @@ export default function POS() {
             <div className="flashrow done" role="status">
               <span className="ico" aria-hidden="true" style={{ background: 'var(--c-teal)', color: '#1E3A38' }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg></span>
               <div><b>Sale #{flash.no} saved.</b> {money(flash.total, cur)}{flash.change > 0 ? `, change ${money(flash.change, cur)}` : ''}
+                {loy && flash.cname && flash.pts != null && <div className="small muted">{flash.earned > 0 ? `${flash.cname} earned ${num(flash.earned)} points. ` : ''}{flash.cname} now has {num(flash.pts)} points.</div>}
                 {flash.failed && <div className="err" style={{ margin: 0 }}>Could not prepare the printer link.</div>}</div>
               {mode !== 'never' && (flash.url
                 ? <a className="btn small primary" href={schemeUrl(flash.url)} style={{ textDecoration: 'none' }}>Print again</a>
@@ -520,15 +543,23 @@ export default function POS() {
                       const sr = stockRef(g);
                       const left = sr.track ? stock[sr.id] ?? 0 : null;
                       return (
-                        <button type="button" key={g.id} className="btn small" onClick={() => addFree(g)} disabled={left !== null && left <= 0 && !sr.allow}>
-                          + {g.name}{left !== null ? <span className="muted" style={{ fontWeight: 600 }}> ({num(left)})</span> : null}
+                        <button type="button" key={g.id} className="btn small" style={left !== null && left <= 0 && !sr.allow ? { opacity: 0.6 } : undefined}
+                          onClick={() => setFreeMsg(addFree(g) ? '' : left !== null && left <= 0
+                            ? `No ${g.name} in stock. ${isCashier ? 'Ask the owner or a manager to add bottle stock.' : 'Add the bottles on the Stock screen first.'}`
+                            : `Only ${num(left)} ${g.name} left.`)}>
+                          + {g.name}{left !== null ? <span className="muted" style={{ fontWeight: 600 }}> ({left <= 0 ? 'none' : num(left)})</span> : null}
                         </button>
                       );
                     })}
                   </div>
+                  {freeMsg && (
+                    <div className="small err" role="alert" style={{ margin: 0 }}>
+                      {freeMsg}{!isCashier && freeMsg.startsWith('No ') && <> <a href="/stock">Open Stock</a></>}
+                    </div>
+                  )}
                 </div>
               ) : (
-                <button type="button" className="btn small" style={{ marginTop: 6 }} onClick={() => setFreePick(true)}>+ Add free bottle</button>
+                <button type="button" className="btn small" style={{ marginTop: 6 }} onClick={() => { setFreeMsg(''); setFreePick(true); }}>+ Add free bottle</button>
               )
             )}
 
@@ -537,7 +568,7 @@ export default function POS() {
                 <button key={m} className={`btn small ${m === method ? 'on' : ''}`} onClick={() => setMethod(m)}>{m}</button>
               ))}
               {splitMethods.length > 1 && (
-                <button className={`btn small ${isSplit ? 'on' : ''}`} onClick={() => { setMethod('__split'); setCustomer(null); }} aria-label="Split the payment">Split</button>
+                <button className={`btn small ${isSplit ? 'on' : ''}`} onClick={() => { setMethod('__split'); if (!loy) { setCustomer(null); setUsePts(''); } }} aria-label="Split the payment">Split</button>
               )}
             </div>}
             {isSplit && (
@@ -563,14 +594,26 @@ export default function POS() {
                 </div>
               </div>
             )}
-            {isCredit && (
+            {(isCredit || loy) && (
               <div className="creditrow">
                 <button type="button" className="btn small grow" onClick={() => setPick(true)}>
-                  {customer ? `On credit: ${customer.name}` : 'Choose the customer'}
+                  {customer ? `${isCredit ? 'On credit' : 'Customer'}: ${customer.name}` : isCredit ? 'Choose the customer' : '+ Customer (earns points)'}
                 </button>
-                {customer && Number(customer.balance) > 0 && (
+                {customer && loy && <span className="small muted">{num(ptsHave)} pts</span>}
+                {customer && isCredit && Number(customer.balance) > 0 && (
                   <span className="small muted">owes {money(customer.balance, cur)}</span>
                 )}
+                {customer && !isCredit && <button type="button" className="btn small" onClick={() => { setCustomer(null); setUsePts(''); }} aria-label="Remove the customer">✕</button>}
+              </div>
+            )}
+            {loy && customer && ptsMax > 0 && online && (
+              <div className="mini">
+                <label>
+                  <span>Use points (has {num(ptsHave)}, 1 point = {money(ptVal, cur)})</span>
+                  <input className="input" inputMode="numeric" value={usePts} placeholder="0" aria-label="Points to use"
+                    onChange={(e) => /^\d*$/.test(e.target.value) && setUsePts(e.target.value)} />
+                </label>
+                <button type="button" className="btn small" style={{ alignSelf: 'flex-end' }} onClick={() => setUsePts(String(ptsMax))}>Use {num(ptsMax)}</button>
               </div>
             )}
             {!online && !isCash && !isCredit && (
@@ -589,9 +632,10 @@ export default function POS() {
                 <input className="input" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0" />
               </label>
             </div>
-            {(disc > 0 || tax > 0 || (isCash && paid !== '' && paidNum >= total)) && (
+            {(disc > 0 || ptsOff > 0 || tax > 0 || (isCash && paid !== '' && paidNum >= total)) && (
               <div className="small muted sumline">
                 {disc > 0 && <span>Discount -{money(disc, cur)}</span>}
+                {ptsOff > 0 && <span>Points ({num(ptsN)}) -{money(ptsOff, cur)}</span>}
                 {tax > 0 && <span>Tax ({rate}%) {money(tax, cur)}</span>}
                 {isCash && paid !== '' && paidNum >= total && <span className="ok">Change {money(change, cur)}</span>}
               </div>
@@ -601,7 +645,7 @@ export default function POS() {
               <button className="btn primary grow" onClick={() => charge(mode !== 'never' && online)} disabled={busy}>
                 {busy ? 'Saving...' : `${isCredit ? 'Give on credit' : mode === 'never' || !online ? 'Charge' : 'Charge and print'}  ${money(total, cur)}`}
               </button>
-              <button className="btn small clearbtn" onClick={() => { setCart([]); setDiscount(''); setPaid(''); }} aria-label="Clear sale">Clear</button>
+              <button className="btn small clearbtn" onClick={() => { setCart([]); setDiscount(''); setPaid(''); setUsePts(''); }} aria-label="Clear sale">Clear</button>
             </div>
           </>
         )}
@@ -632,10 +676,10 @@ export default function POS() {
 
       {pick && (
         <CustomerPick
-          rows={customers} cur={cur} businessId={business.id}
+          rows={customers} cur={cur} businessId={business.id} loy={loy} credit={isCredit}
           onClose={() => setPick(false)}
-          onPick={(c) => { setCustomer(c); setPick(false); setErr(''); }}
-          onAdded={(c) => { setCustomers((l) => [...l, c]); setCustomer(c); setPick(false); setErr(''); }}
+          onPick={(c) => { setCustomer(c); setUsePts(''); setPick(false); setErr(''); }}
+          onAdded={(c) => { setCustomers((l) => [...l, c]); setCustomer(c); setUsePts(''); setPick(false); setErr(''); }}
         />
       )}
     </div>
@@ -643,7 +687,7 @@ export default function POS() {
 }
 
 // Pick who is taking the goods, or save a new person without leaving the till.
-function CustomerPick({ rows, cur, businessId, onClose, onPick, onAdded }) {
+function CustomerPick({ rows, cur, businessId, loy, credit, onClose, onPick, onAdded }) {
   const [t, setT] = useState('');
   const [phone, setPhone] = useState('');
   const [err, setErr] = useState('');
@@ -660,17 +704,19 @@ function CustomerPick({ rows, cur, businessId, onClose, onPick, onAdded }) {
       .select('id,name,phone').single();
     setBusy(false);
     if (error) return setErr(/duplicate|unique/i.test(error.message) ? 'That number is already saved for another customer' : error.message);
-    onAdded({ ...data, balance: 0 });
+    onAdded({ ...data, balance: 0, points: 0 });
   }
 
   return (
-    <Modal title="Who is taking this?" onClose={onClose}>
+    <Modal title={credit || !loy ? 'Who is taking this?' : 'Who is buying?'} onClose={onClose}>
       <input className="input" autoFocus placeholder="Search or type a new name" value={t} onChange={(e) => { setT(e.target.value); setErr(''); }} aria-label="Customer name" />
       <div style={{ maxHeight: '38vh', overflowY: 'auto', margin: '10px 0' }}>
         {found.map((r) => (
           <button key={r.id} className="debtrow" onClick={() => onPick(r)}>
             <div><b>{r.name}</b><div className="small muted">{r.phone || 'No number'}</div></div>
-            <div className={`amt ${Number(r.balance) > 0 ? 'owing' : 'clear'}`}>{Number(r.balance) > 0 ? money(r.balance, cur) : 'Cleared'}</div>
+            {loy && !credit
+              ? <div className="amt clear">{num(r.points || 0)} pts{Number(r.balance) > 0 ? <div className="small" style={{ color: 'var(--error)' }}>owes {money(r.balance, cur)}</div> : null}</div>
+              : <div className={`amt ${Number(r.balance) > 0 ? 'owing' : 'clear'}`}>{Number(r.balance) > 0 ? money(r.balance, cur) : 'Cleared'}</div>}
           </button>
         ))}
         {found.length === 0 && <p className="muted small">Nobody by that name yet.</p>}
@@ -678,7 +724,7 @@ function CustomerPick({ rows, cur, businessId, onClose, onPick, onAdded }) {
       {t.trim() && !found.some((r) => r.name.toLowerCase() === term) && (
         <div className="tint">
           <b className="small">New customer: {t.trim()}</b>
-          <label className="field" style={{ margin: '8px 0' }}><span>Phone number (for reminders)</span>
+          <label className="field" style={{ margin: '8px 0' }}><span>Phone number{loy ? '' : ' (for reminders)'}</span>
             <input className="input" inputMode="tel" placeholder="0722 000 111" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </label>
           <button className="btn primary" style={{ width: '100%' }} disabled={busy} onClick={create}>{busy ? 'Saving...' : 'Save and use'}</button>

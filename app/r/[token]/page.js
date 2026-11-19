@@ -120,9 +120,11 @@ export default async function EReceipt({ params }) {
 
         <section className="er-sum">
           <div className="er-row"><span>Subtotal</span><span>{n2(sale.subtotal)}</span></div>
-          {Number(sale.discount) > 0 && <div className="er-row"><span>Discount</span><span>-{n2(sale.discount)}</span></div>}
+          {Number(sale.discount) - Number(sale.points_value || 0) > 0.004 && <div className="er-row"><span>Discount</span><span>-{n2(Number(sale.discount) - Number(sale.points_value || 0))}</span></div>}
+          {Number(sale.points_value) > 0 && <div className="er-row"><span>Points used ({sale.points_used})</span><span>-{n2(sale.points_value)}</span></div>}
           {Number(sale.tax) > 0 && <div className="er-row"><span>Tax ({n2(b.tax_rate)}%)</span><span>{n2(sale.tax)}</span></div>}
           <div className="er-row er-grand"><span>Total {cur}</span><span>{n2(sale.total)}</span></div>
+          {Number(sale.points_earned) > 0 && <div className="er-row"><span>Points earned</span><span>{sale.points_earned}</span></div>}
           {sale.payments?.length
             ? payLines(sale).map((p) => <div className="er-row" key={p.method}><span>Paid by {p.method}</span><span>{n2(p.amount)}</span></div>)
             : <div className="er-row"><span>Paid by {sale.payment_method}</span><span>{n2(sale.amount_paid)}</span></div>}

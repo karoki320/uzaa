@@ -207,6 +207,10 @@ export default function Settings() {
     notify_min: business.notify_min ?? 0,
     credit_enabled: !!business.credit_enabled,
     credit_limit: business.credit_limit ?? 5000,
+    loyalty_enabled: !!business.loyalty_enabled,
+    loyalty_spend_per_point: business.loyalty_spend_per_point ?? 100,
+    loyalty_point_value: business.loyalty_point_value ?? 1,
+    loyalty_min_redeem: business.loyalty_min_redeem ?? 100,
     ereceipt_enabled: !!business.ereceipt_enabled,
     ereceipt_whatsapp: business.ereceipt_whatsapp || '',
     ereceipt_message: business.ereceipt_message || '',
@@ -242,6 +246,13 @@ export default function Settings() {
       if (!hexOk(f.ereceipt_color)) { setBusy(false); return setErr('E-receipts: the brand colour must look like #0b5c87'); }
     }
     if (f.ereceipt_link_url.trim() && !urlOk(f.ereceipt_link_url)) { setBusy(false); return setErr('E-receipts: the extra link must start with https://'); }
+    const loyFeat = !!business.features?.loyalty;
+    if (loyFeat && f.loyalty_enabled) {
+      const per = Number(f.loyalty_spend_per_point), val = Number(f.loyalty_point_value), mn = Number(f.loyalty_min_redeem);
+      if (!(per >= 1)) { setBusy(false); return setErr('Loyalty points: the amount spent for 1 point must be at least 1'); }
+      if (!(val >= 0) || f.loyalty_point_value === '') { setBusy(false); return setErr('Loyalty points: enter what 1 point is worth'); }
+      if (!(mn >= 0) || mn !== Math.trunc(mn)) { setBusy(false); return setErr('Loyalty points: the points needed before use must be a whole number'); }
+    }
     const cleaned = fields.filter((x) => x.label.trim()).map((x) => ({ key: x.key || slug(x.label), label: x.label.trim(), type: x.type }));
     const { error } = await supabase.from('businesses').update({
       name: f.name.trim(), business_type: f.business_type, item_label: f.item_label.trim() || 'Product',
@@ -250,6 +261,13 @@ export default function Settings() {
       receipt_mode: f.receipt_mode, barcode_enabled: !!f.barcode_enabled,
       payment_methods: methods, custom_fields: cleaned,
       credit_enabled: !!f.credit_enabled, credit_limit: Math.max(0, Number(f.credit_limit) || 0),
+      // only for businesses with the Loyalty feature, so Settings still saves elsewhere before patch 22 is run
+      ...(loyFeat ? {
+        loyalty_enabled: !!f.loyalty_enabled,
+        loyalty_spend_per_point: Math.max(1, Number(f.loyalty_spend_per_point) || 100),
+        loyalty_point_value: Math.max(0, Number(f.loyalty_point_value) || 0),
+        loyalty_min_redeem: Math.max(0, Math.trunc(Number(f.loyalty_min_redeem) || 0)),
+      } : {}),
       notify_mode: f.notify_mode, notify_hour: Math.min(23, Math.max(0, Number(f.notify_hour) || 0)),
       notify_min: Math.max(0, Number(f.notify_min) || 0),
       ereceipt_enabled: !!f.ereceipt_enabled,
@@ -281,7 +299,7 @@ export default function Settings() {
           <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2 }}>{business.name}</div>
           <p>Changes apply at once to every screen and receipt.</p>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-            {[['E-receipts', f.ereceipt_enabled], ['Credit', f.credit_enabled], ['Barcodes', f.barcode_enabled], ['Phone alerts', f.notify_mode !== 'off']].map(([l, on]) => (
+            {[['E-receipts', f.ereceipt_enabled], ['Credit', f.credit_enabled], ...(business.features?.loyalty ? [['Loyalty', f.loyalty_enabled]] : []), ['Barcodes', f.barcode_enabled], ['Phone alerts', f.notify_mode !== 'off']].map(([l, on]) => (
               <span key={l} style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: on ? 'rgba(133,198,193,0.25)' : 'rgba(255,255,255,0.1)', color: on ? '#BFEDE8' : '#B9CCDA' }}>{on ? '✓' : '○'} {l}</span>
             ))}
           </div>
@@ -405,6 +423,8 @@ export default function Settings() {
         )}
       </div>
 
+      {business.features?.loyalty && <LoyaltyCard f={f} setF={setF} set={set} />}
+
       <div className="card">
         <h3>Receipts</h3>
         <label className="field"><span>After each sale</span>
@@ -445,5 +465,45 @@ export default function Settings() {
       {msg && <div className="ok">{msg}</div>}
       <button className="btn primary" disabled={busy}>{busy ? 'Saving...' : 'Save settings'}</button>
     </form>
+  );
+}
+
+// Loyalty points rules (patch 22): how customers earn points and what a point is worth
+function LoyaltyCard({ f, setF, set }) {
+  const cur = f.currency || 'KES';
+  const per = Number(f.loyalty_spend_per_point) || 0, val = Number(f.loyalty_point_value) || 0, mn = Number(f.loyalty_min_redeem) || 0;
+  const ex = 5000;
+  const earned = per >= 1 ? Math.floor(ex / per) : 0;
+  return (
+    <div className="card">
+      <h3>Loyalty points</h3>
+      <label className="row" style={{ marginBottom: 6 }}>
+        <input type="checkbox" checked={f.loyalty_enabled} onChange={(e) => setF({ ...f, loyalty_enabled: e.target.checked })} /> Reward my customers with points
+      </label>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        At the till, choose the customer and the sale earns points. Next time they can use their points as money off.
+        You see every customer, what they have bought and their points under Customers.
+      </p>
+      {f.loyalty_enabled && (
+        <>
+          <div className="row">
+            <label className="field grow"><span>Spend this much to earn 1 point ({cur})</span>
+              <input className="input" inputMode="decimal" value={f.loyalty_spend_per_point} onChange={set('loyalty_spend_per_point')} placeholder="100" />
+            </label>
+            <label className="field grow"><span>1 point is worth ({cur} off)</span>
+              <input className="input" inputMode="decimal" value={f.loyalty_point_value} onChange={set('loyalty_point_value')} placeholder="1" />
+            </label>
+            <label className="field grow"><span>Points needed before they can be used</span>
+              <input className="input" inputMode="numeric" value={f.loyalty_min_redeem} onChange={set('loyalty_min_redeem')} placeholder="100" />
+            </label>
+          </div>
+          <div className="tint small">
+            Example: a customer who spends {cur} {ex.toLocaleString('en-KE')} earns <b>{earned}</b> point{earned === 1 ? '' : 's'}, worth {cur} {(earned * val).toLocaleString('en-KE', { maximumFractionDigits: 2 })} off a later purchase
+            {per > 0 && val > 0 ? ` (${Math.round((val / per) * 10000) / 100}% back)` : ''}.
+            {mn > 0 ? ` They can use points once they have ${mn}.` : ' They can use points straight away.'} Credit sales do not earn points.
+          </div>
+        </>
+      )}
+    </div>
   );
 }

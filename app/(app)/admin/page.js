@@ -256,6 +256,8 @@ export default function Admin() {
                         <button className="btn small" onClick={() => setBillFor(b)}>Billing</button>
                         <button className={`btn small ${feats[b.id]?.pour ? 'primary' : ''}`} title="Pour / Decant: refill display bottles and make decants from wholesale stock"
                           onClick={() => setFeature(b, 'pour', !feats[b.id]?.pour)}>{feats[b.id]?.pour ? 'Pour: on' : 'Pour: off'}</button>
+                        <button className={`btn small ${feats[b.id]?.loyalty ? 'primary' : ''}`} title="Customers and loyalty points: a Customers screen, points at the till, rules under Settings"
+                          onClick={() => setFeature(b, 'loyalty', !feats[b.id]?.loyalty)}>{feats[b.id]?.loyalty ? 'Loyalty: on' : 'Loyalty: off'}</button>
                         <button className="btn small" onClick={() => setNewAgr(b)}>Agreement</button>
                         <button className="btn small danger" onClick={() => askDelete(b)}>Remove</button>
                       </div>
