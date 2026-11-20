@@ -388,16 +388,19 @@ ul.rules li.met { color: #1a6b3a; font-weight: 600; }
 .ua-typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
 .ua-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: ua-dot .6s ease-in-out infinite alternate; }
 .ua-typing i:nth-child(2) { animation-delay: .2s; } .ua-typing i:nth-child(3) { animation-delay: .4s; }
+/* on the till the assistant is a slim tab on the right edge, clear of the cart, Charge and search buttons */
+.ua.ua-pos { right: 0; bottom: auto; top: 46vh; flex-direction: column-reverse; }
+.ua.ua-pos .ua-fab { width: 34px; height: 42px; border-radius: 14px 0 0 14px; background: var(--surface); border: 1px solid var(--line); border-right: 0; filter: none; box-shadow: 0 4px 12px rgba(20, 24, 31, .12); animation: none; opacity: .85; }
+.ua.ua-pos .ua-fab:hover { transform: none; opacity: 1; }
+.ua.ua-pos .ua-fab .uzface { width: 28px; height: 28px; }
+.ua.ua-pos .ua-bubble { display: none; }
+.ua.ua-pos .ua-panel { position: fixed; right: 12px; top: 64px; }
 .ua-peek { position: fixed; right: 0; bottom: 120px; z-index: 45; border: 1px solid var(--line); border-right: 0; background: var(--surface); border-radius: 14px 0 0 14px; padding: 6px 6px 6px 8px; cursor: pointer; box-shadow: 0 4px 12px rgba(20, 24, 31, .12); }
 @media (max-width: 899px) {
   .ua { right: 12px; bottom: calc(72px + env(safe-area-inset-bottom)); }
   .ua-fab { width: 58px; height: 58px; }
   .ua-fab .uzface { width: 50px; height: 50px; }
   .ua-panel { height: min(520px, calc(100vh - 170px)); }
-  /* on the till the cart sits at the bottom, so the assistant waits at the top right */
-  .ua.ua-pos { bottom: auto; top: 64px; flex-direction: column-reverse; }
-  .ua.ua-pos .ua-fab { width: 46px; height: 46px; }
-  .ua.ua-pos .ua-fab .uzface { width: 40px; height: 40px; }
   .ua.ua-pos .ua-panel { height: min(480px, calc(100vh - 220px)); }
   .ua-peek { bottom: calc(140px + env(safe-area-inset-bottom)); }
 }
@@ -708,3 +711,4 @@ button.lrow { cursor: pointer; }
 /* till: an item that cannot be sold (out of stock, not allowed to sell at 0) */
 .tile.off { opacity: 0.55; filter: grayscale(0.4); }
 .tile.off .stk.out { background: #FFE1CF; color: #7A2A00; }
+.ua.ua-pos.nonav { bottom: auto; }

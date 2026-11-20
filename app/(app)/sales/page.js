@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import Link from 'next/link';
 import CountUp from '@/components/CountUp';
+import { post } from '@/lib/api';
 import CloseDay, { Breakdown } from '@/components/CloseDay';
 import { fmtDate, isoDate, money, payLines, payLabel } from '@/lib/util';
 import Modal from '@/components/Modal';
@@ -104,11 +105,14 @@ export default function Sales() {
   const cashSpent = spent.filter((e) => (e.paid_from || '').toLowerCase() === 'cash').reduce((s, e) => s + Number(e.amount), 0);
   const tone = (n) => { const k = n.toLowerCase().replace(/[^a-z]/g, ''); return k === 'cash' ? 'cash' : k === 'mpesa' ? 'mpesa' : k === 'credit' ? 'credit' : k === 'card' ? 'card' : 'other'; };
 
+  // who may reverse a sale: owner and managers any; a cashier their own sales from today (the database checks too)
+  const canReverse = (sale) => !isCashier || (sale.cashier_id === profile.id && isoDate(sale.created_at) === today);
   async function removeSale() {
-    if (!del || del.reason.trim().length < 3) return setDel({ ...del, err: 'Write why this sale is being deleted' });
+    if (!del || del.reason.trim().length < 3) return setDel({ ...del, err: 'Write why this sale is being reversed' });
     setDel({ ...del, busy: true, err: '' });
-    const { error } = await supabase.rpc('delete_sale', { p_sale: view.sale.id, p_reason: del.reason.trim() });
-    if (error) return setDel({ ...del, busy: false, err: /function .*delete_sale/i.test(error.message) ? 'Run security-patch-13.sql in Supabase first.' : error.message });
+    const { data, error } = await supabase.rpc('delete_sale', { p_sale: view.sale.id, p_reason: del.reason.trim() });
+    if (error) return setDel({ ...del, busy: false, err: /function .*delete_sale/i.test(error.message) ? 'Run security-patch-23.sql in Supabase first.' : /Only the owner/.test(error.message) ? 'Run security-patch-23.sql in Supabase so staff can reverse sales.' : error.message });
+    if (data) post('/api/sale/deleted', { id: data });   // the owner's phone
     setDel(null); setView(null); load();
   }
 
@@ -250,19 +254,19 @@ export default function Sales() {
             {business.ereceipt_enabled && (
               <button className="btn" style={{ width: '100%', marginTop: 12, background: '#25D366', borderColor: '#25D366', color: '#0b2e17' }} onClick={() => { setESend(view); setView(null); }}>Send e-receipt on WhatsApp</button>
             )}
-            {isOwner && !del && (
-              <button className="btn danger" style={{ width: '100%', marginTop: 12 }} onClick={() => setDel({ reason: '', busy: false, err: '' })}>Delete this sale</button>
+            {canReverse(view.sale) && !del && (
+              <button className="btn danger" style={{ width: '100%', marginTop: 12 }} onClick={() => setDel({ reason: '', busy: false, err: '' })}>Reverse (delete) this sale</button>
             )}
-            {isOwner && del && (
+            {canReverse(view.sale) && del && (
               <div className="card" style={{ marginTop: 12, borderColor: 'var(--error)' }}>
-                <b>Delete sale #{view.sale.receipt_no}?</b>
-                <p className="small muted" style={{ margin: '6px 0 10px' }}>The items go back into stock and the sale leaves every total and report. A copy is kept with your name and the reason.</p>
+                <b>Reverse sale #{view.sale.receipt_no}?</b>
+                <p className="small muted" style={{ margin: '6px 0 10px' }}>The items go back into stock and the sale leaves every total and report. A copy is kept with your name and the reason{isOwner ? '' : ', and the owner is told'}.</p>
                 <label className="field"><span>Why? (for example: cashier sold the wrong item)</span>
                   <input className="input" maxLength={300} autoFocus value={del.reason} onChange={(e) => setDel({ ...del, reason: e.target.value, err: '' })} />
                 </label>
                 {del.err && <div className="err" role="alert">{del.err}</div>}
                 <div className="row">
-                  <button className="btn danger grow" disabled={del.busy} onClick={removeSale}>{del.busy ? 'Deleting...' : 'Yes, delete it'}</button>
+                  <button className="btn danger grow" disabled={del.busy} onClick={removeSale}>{del.busy ? 'Reversing...' : 'Yes, reverse it'}</button>
                   <button className="btn grow" disabled={del.busy} onClick={() => setDel(null)}>Keep it</button>
                 </div>
               </div>

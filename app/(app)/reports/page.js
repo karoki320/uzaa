@@ -87,6 +87,20 @@ export default function Reports() {
   const [times, setTimes] = useState([]);   // each sale's time and total, for the busy-hours chart
 
   const range = useMemo(() => rangeFor(preset), [preset]);
+  const [gone, setGone] = useState([]);   // sales reversed in the period, with who did it (the owner is told)
+  useEffect(() => {
+    let off = false;
+    (async () => {
+      let g = supabase.from('sale_deletions').select('id,receipt_no,total,reason,deleted_by,created_at,branch_id')
+        .gte('created_at', range.from.toISOString()).lt('created_at', range.to.toISOString()).order('created_at', { ascending: false }).limit(50);
+      if (branchId) g = g.eq('branch_id', branchId);
+      const [a, b] = await Promise.all([g, supabase.from('profiles').select('id,full_name')]);
+      if (off || a.error) return;
+      const nm = Object.fromEntries((b.data || []).map((x) => [x.id, x.full_name]));
+      setGone((a.data || []).map((x) => ({ ...x, who: nm[x.deleted_by] || 'Someone' })));
+    })();
+    return () => { off = true; };
+  }, [range, branchId]);
   const oneDay = range.to - range.from <= 864e5 + 3.6e6;
 
   useEffect(() => {
@@ -199,8 +213,16 @@ export default function Reports() {
 
   // plain-language findings, most useful first; only ones the numbers really support
   const insights = useMemo(() => {
-    if (!data || !revenue) return [];
     const out = [];
+    // reversed sales come first: the owner should always see them
+    if (gone.length) {
+      const sum = gone.reduce((a, x) => a + Number(x.total || 0), 0);
+      const x = gone[0];
+      out.push({ tone: 'peach', href: '/sales', text: gone.length === 1
+        ? <><b>Sale #{x.receipt_no} ({money(x.total, cur)}) was reversed</b> by {x.who}: “{x.reason}”.</>
+        : <><b>{gone.length} sales ({money(sum, cur)}) were reversed.</b> Latest: #{x.receipt_no} by {x.who}, “{x.reason}”.</> });
+    }
+    if (!data || !revenue) return out;
     const top = (data.top_products || [])[0];
     const lowIds = new Set(low.map((x) => x.name));
     if (top && lowIds.has(top.name)) out.push({ tone: 'amber', text: <><b>{top.name}</b> is your best seller and is running low. Reorder it before it runs out.</> , href: '/stock' });
@@ -226,8 +248,8 @@ export default function Reports() {
       const ap = pct(avgNow, avgThen);
       if (ap !== null && Math.abs(ap) >= 10) out.push({ tone: ap > 0 ? 'ice' : 'amber', text: <>Customers spent {ap > 0 ? 'more' : 'less'} per visit: <b>{money(avgNow, cur)}</b> against {money(avgThen, cur)} before.</> });
     }
-    return out.slice(0, 4);
-  }, [data, revenue, low, heat, times, best, bars, oneDay, pays, payTotal, exp, rp, t, pt, cur]);
+    return out.slice(0, gone.length ? 5 : 4);
+  }, [data, revenue, low, heat, times, best, bars, oneDay, pays, payTotal, exp, rp, t, pt, cur, gone]);
 
   return (
     <>

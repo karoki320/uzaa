@@ -69,7 +69,18 @@ export default function POS() {
   const label = business.item_label || 'Product';
   const eOn = !!business.ereceipt_enabled;
   const [eSend, setESend] = useState(null);   // the sale whose e-receipt is being sent on WhatsApp
-  const [pour, setPour] = useState(false);   // Pour / Decant from the till (switched on per business)
+  const [pour, setPour] = useState(false);
+  const [rev, setRev] = useState(null);   // reversing the sale just made: { reason, busy, err }
+  async function reverseFlash() {
+    if (!rev || rev.reason.trim().length < 3) return setRev({ ...rev, err: 'Write why this sale is being reversed' });
+    setRev({ ...rev, busy: true, err: '' });
+    const { data, error } = await supabase.rpc('delete_sale', { p_sale: flash.id, p_reason: rev.reason.trim() });
+    if (error) return setRev({ ...rev, busy: false, err: /Only the owner|function .*delete_sale/i.test(error.message) ? 'Run security-patch-23.sql in Supabase so staff can reverse sales.' : error.message });
+    if (data) post('/api/sale/deleted', { id: data });   // the owner's phone
+    setRev(null); setFlash(null);
+    setErr(`Sale #${flash.no} reversed. The items are back in stock.`);
+    loadStock();
+  }   // Pour / Decant from the till (switched on per business)
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -341,7 +352,7 @@ export default function POS() {
       at: new Date().toISOString(),
       status: 'queued',
     };
-    const finish = () => { setCart([]); setDiscount(''); setPaid(''); setQ(''); setRef(''); setCustomer(null); setUsePts(''); setSplit((x) => ({ ...x, vals: {}, auto: '' })); };
+    const finish = () => { setRev(null); setCart([]); setDiscount(''); setPaid(''); setQ(''); setRef(''); setCustomer(null); setUsePts(''); setSplit((x) => ({ ...x, vals: {}, auto: '' })); };
 
     // keep it on the phone: no signal, or the request failed on the way
     const keep = async () => {
@@ -502,7 +513,20 @@ export default function POS() {
                 ? <a className="btn small primary" href={schemeUrl(flash.url)} style={{ textDecoration: 'none' }}>Print again</a>
                 : <button className="btn small" disabled={flash.failed} onClick={async () => { const r = await post('/api/print/link', { sale_id: flash.id, width: paperWidth() }); if (r.ok) { setFlash({ ...flash, url: r.data.url, failed: false }); window.location.href = schemeUrl(r.data.url); } else setFlash({ ...flash, failed: true }); }}>Print</button>)}
               {eOn && <button className="btn small primary" onClick={() => setESend(flash)}>E-receipt</button>}
-              <button className="btn small" onClick={() => setFlash(null)} aria-label="Dismiss">Close</button>
+              {!rev && <button className="btn small danger" onClick={() => setRev({ reason: '', busy: false, err: '' })}>Reverse</button>}
+              <button className="btn small" onClick={() => { setFlash(null); setRev(null); }} aria-label="Dismiss">Close</button>
+              {rev && (
+                <div style={{ width: '100%', display: 'grid', gap: 6 }}>
+                  <input className="input" autoFocus maxLength={300} placeholder="Why? e.g. wrong item, wrong amount" value={rev.reason}
+                    onChange={(e) => setRev({ ...rev, reason: e.target.value, err: '' })} aria-label="Why this sale is being reversed" style={{ minHeight: 42 }} />
+                  {rev.err && <div className="err" role="alert" style={{ margin: 0 }}>{rev.err}</div>}
+                  <div className="row" style={{ gap: 6 }}>
+                    <button className="btn small danger grow" disabled={rev.busy} onClick={reverseFlash}>{rev.busy ? 'Reversing...' : `Reverse sale #${flash.no}`}</button>
+                    <button className="btn small grow" disabled={rev.busy} onClick={() => setRev(null)}>Keep it</button>
+                  </div>
+                  <span className="small muted">The items go back into stock and the owner is told.</span>
+                </div>
+              )}
             </div>)
           ) : <p className="muted cart-empty">Tap an item to start a sale.</p>
         )}
