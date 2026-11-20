@@ -712,3 +712,15 @@ button.lrow { cursor: pointer; }
 .tile.off { opacity: 0.55; filter: grayscale(0.4); }
 .tile.off .stk.out { background: #FFE1CF; color: #7A2A00; }
 .ua.ua-pos.nonav { bottom: auto; }
+
+/* Quick add at the till (patch 25): the + New button stands out from the grey icon buttons */
+.addbtn { flex: none; height: 44px; padding: 0 16px 0 12px; border-radius: 999px; border: 0; margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  background: var(--btn-blue, #0B5C87); color: #fff; font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
+  box-shadow: 0 6px 16px rgba(11, 92, 135, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35); animation: addpulse 2.4s ease-out 2; }
+.addbtn:active { transform: scale(0.96); }
+.addbtn:focus-visible { outline: 3px solid #F5CF86; outline-offset: 2px; }
+.addbtn ~ .iconbtn { margin-left: 0 !important; }
+@keyframes addpulse { 0% { box-shadow: 0 0 0 0 rgba(42, 139, 190, 0.55), 0 6px 16px rgba(11, 92, 135, 0.35); } 70% { box-shadow: 0 0 0 12px rgba(42, 139, 190, 0), 0 6px 16px rgba(11, 92, 135, 0.35); } 100% { box-shadow: 0 6px 16px rgba(11, 92, 135, 0.35); } }
+@media (prefers-reduced-motion: reduce) { .addbtn { animation: none; } }
+@media (min-width: 900px) { .addbtn { margin-left: 0; } }
+.addrow { width: 100%; margin: 8px 0; justify-content: flex-start; min-height: 52px; font-weight: 800; font-size: 15px; border-radius: 14px; }

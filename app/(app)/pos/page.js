@@ -466,6 +466,12 @@ export default function POS() {
             <button className={!cat ? 'on' : ''} onClick={() => setCat('')}>All</button>
             {cats.map((c) => <button key={c} className={cat === c ? 'on' : ''} onClick={() => setCat(cat === c ? '' : c)}>{c}</button>)}
           </div>
+          {canAdd && (
+            <button type="button" className="addbtn" onClick={() => setQuick({ text: q })} aria-label="Add a new item and sell it" title="Add a new item and sell it">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              <span>New</span>
+            </button>
+          )}
           {barcodeOn && (
             <button type="button" className="iconbtn" onClick={() => { setScanOut(false); setScan(true); }} aria-label="Scan with camera" title="Scan with camera">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3" /><path d="M8 8v8M11 8v8M14 8v8M17 8v8" /></svg>
@@ -474,11 +480,6 @@ export default function POS() {
           {business.features?.pour && (
             <button type="button" className="iconbtn" style={{ marginLeft: 0 }} onClick={() => setPour(true)} aria-label="Pour or decant" title="Pour / Decant">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3h6M9 3v4l-4 6v6a2 2 0 002 2h6a2 2 0 002-2v-6l-4-6V3" /><path d="M5 14h10" /></svg>
-            </button>
-          )}
-          {canAdd && (
-            <button type="button" className="iconbtn" style={{ marginLeft: 0 }} onClick={() => setQuick({ text: q })} aria-label="Add a new item and sell it" title="Add a new item and sell it">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             </button>
           )}
           <button type="button" className="iconbtn" style={barcodeOn || canAdd ? { marginLeft: 0 } : undefined} onClick={() => { setShowSearch((v) => !v); setTimeout(() => input.current?.focus(), 30); }} aria-label="Search" aria-expanded={showSearch}>
@@ -504,7 +505,7 @@ export default function POS() {
           </div>
         )}
         {canAdd && q.trim() && !exactName && (
-          <button type="button" className="btn" style={{ width: '100%', margin: '8px 0', justifyContent: 'flex-start', minHeight: 48, fontWeight: 700 }} onClick={() => setQuick({ text: q })}>
+          <button type="button" className="btn primary addrow" onClick={() => setQuick({ text: q })}>
             + Add "{q.trim().slice(0, 40)}" and sell{filtered.length ? '' : ' (not in your shop yet)'}
           </button>
         )}
