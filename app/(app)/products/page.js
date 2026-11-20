@@ -36,6 +36,7 @@ export default function Products() {
   const [limit, setLimit] = useState(PAGE);   // rows drawn on screen; search still covers everything
   useEffect(() => { setLimit(PAGE); }, [q]);
   const [costMode, setCostMode] = useState(false);   // the "fill in cost prices" list
+  const [tillMode, setTillMode] = useState(false);   // items cashiers added at the till, waiting for the owner to check (patch 25)
   const [costs, setCosts] = useState({});            // typed costs in that list, by product id
   const skipCost = useRef(false);                    // "save without a cost" was pressed
   // stock of the item being edited, per branch: { now: {branchId: qty}, val: {branchId: typed}, mode, reason, hist }
@@ -133,10 +134,11 @@ export default function Products() {
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const base = costMode ? rows.filter((p) => p.active && !(Number(p.cost) > 0)) : rows;
+    const base = costMode ? rows.filter((p) => p.active && !(Number(p.cost) > 0)) : tillMode ? rows.filter((p) => p.added_at_till) : rows;
     return t ? base.filter((p) => p.name.toLowerCase().includes(t) || (p.barcode || '').includes(t) || (p.category || '').toLowerCase().includes(t)) : base;
-  }, [rows, q, costMode]);
+  }, [rows, q, costMode, tillMode]);
   const noCost = rows.filter((p) => p.active && !(Number(p.cost) > 0)).length;
+  const fromTill = rows.filter((p) => p.added_at_till).length;
   const hidden = rows.filter((p) => !p.active).length;
 
   async function saveCost(p) {
@@ -179,6 +181,8 @@ export default function Products() {
     if (hasSws) payload.sell_without_stock = !!edit.sell_without_stock;
     // can be given free at the till (patch 21)
     if (hasGive) payload.giveaway = !!edit.giveaway;
+    // the owner or a manager has checked an item added at the till
+    if (edit.id && edit.added_at_till && canEdit) payload.added_at_till = false;
     // bulk price and shared stock (only once the database has the columns: security-patch-16.sql)
     if (hasNew) {
       const bm = Number(edit.bulk_min) || 0, bp = edit.bulk_price === '' || edit.bulk_price == null ? null : Number(edit.bulk_price);
@@ -310,7 +314,15 @@ export default function Products() {
         <div className="alert">
           <span className="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 6H9.5a3 3 0 000 6h5a3 3 0 010 6H6" /></svg></span>
           <span>{costMode ? 'Type what you paid for each item. It saves as you go.' : <><b>{noCost} item{noCost === 1 ? ' has' : 's have'} no cost price.</b> Profit and stock value stay wrong until you add them.</>}</span>
-          <button className="btn small" onClick={() => { setCostMode((v) => !v); setQ(''); }}>{costMode ? 'Done' : 'Fill them in'}</button>
+          <button className="btn small" onClick={() => { setCostMode((v) => !v); setTillMode(false); setQ(''); }}>{costMode ? 'Done' : 'Fill them in'}</button>
+        </div>
+      )}
+
+      {canEdit && (fromTill > 0 || tillMode) && (
+        <div className="alert">
+          <span className="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></span>
+          <span>{tillMode ? 'Open each item to check its name, price, cost and category, then Save. Saved items leave this list.' : <><b>{fromTill} item{fromTill === 1 ? ' was' : 's were'} added at the till.</b> Check the names and prices.</>}</span>
+          <button className="btn small" onClick={() => { setTillMode((v) => !v); setCostMode(false); setQ(''); }}>{tillMode ? 'Done' : 'Review'}</button>
         </div>
       )}
 
@@ -331,7 +343,7 @@ export default function Products() {
                     onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); pick(p.id); } }}>{picked.has(p.id) ? '✓' : ''}</span>
                 : <span className="rank" style={{ background: toneFor(p.category || p.name) }}>{initialsOf(p.name)}</span>}
               <span className="grow2">
-                <b style={{ fontSize: 14 }}>{p.name}{!p.active && <span className="badge red" style={{ marginLeft: 6, fontSize: 11 }}>Hidden</span>}</b>
+                <b style={{ fontSize: 14 }}>{p.name}{!p.active && <span className="badge red" style={{ marginLeft: 6, fontSize: 11 }}>Hidden</span>}{canEdit && p.added_at_till && <span className="badge" style={{ marginLeft: 6, fontSize: 11 }}>Added at till</span>}{p.needs_count && <span className="badge" style={{ marginLeft: 6, fontSize: 11 }}>Needs count</span>}</b>
                 <span>{[p.category, barcodeOn && p.barcode].filter(Boolean).join(' · ') || 'No category'}{p.sell_without_stock ? ' · sells at 0 stock' : ''}</span>
                 {canEdit && !costMode && <span>{cost > 0 ? `Cost ${money(cost, business.currency)}` : 'No cost price'}{margin !== null && <b style={{ color: margin < 10 ? '#7A2A00' : '#0A4F74' }}> · {margin}% margin</b>}</span>}
               </span>

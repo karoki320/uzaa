@@ -13,6 +13,8 @@ import { findByBarcode } from '@/lib/barcode';
 import EReceiptSend from '@/components/EReceiptSend';
 import PourStock from '@/components/PourStock';
 import { loyaltyOn, pointsWorth } from '@/lib/loyalty';
+import QuickAdd from '@/components/QuickAdd';
+import { norm } from '@/lib/quickadd';
 
 // each category gets its own pastel tile colour, so the till is quick to read at a glance
 const TILE_TONES = ['var(--c-teal)', 'var(--c-ice)', 'var(--c-lav)', 'var(--c-amber)', 'var(--c-peach)', 'var(--c-pale)'];
@@ -70,6 +72,9 @@ export default function POS() {
   const eOn = !!business.ereceipt_enabled;
   const [eSend, setESend] = useState(null);   // the sale whose e-receipt is being sent on WhatsApp
   const [pour, setPour] = useState(false);
+  // quick add (patch 25): sell an item that is not in Products yet. Cashiers only when the owner allows them to add items.
+  const canAdd = !isCashier || business.cashier_add_products !== false;
+  const [quick, setQuick] = useState(null);   // { text } while the "Add and sell" sheet is open
   const [rev, setRev] = useState(null);   // reversing the sale just made: { reason, busy, err }
   async function reverseFlash() {
     if (!rev || rev.reason.trim().length < 3) return setRev({ ...rev, err: 'Write why this sale is being reversed' });
@@ -220,13 +225,15 @@ export default function POS() {
     const exact = findByBarcode(products, t);
     if (exact) { add(exact); setQ(''); return; }
     if (filtered.length === 1) { add(filtered[0]); setQ(''); return; }
+    if (!filtered.length && canAdd) { setQuick({ text: t }); return; }
     setErr(`No exact match for "${t}"`);
   }
 
   // a code read by the phone camera: same as a handheld scanner
   function onScan(code) {
     const p = findByBarcode(products, code);
-    if (!p) return { ok: false, text: `No ${label.toLowerCase()} has barcode ${code}.${isCashier ? ' Ask your manager to add it.' : ' Add it under Products first.'}` };
+    if (!p && canAdd) { setScan(false); setQuick({ text: code }); return { ok: false, text: `${code} is new: type its name and price` }; }
+    if (!p) return { ok: false, text: `No ${label.toLowerCase()} has barcode ${code}. Ask your manager to add it.` };
     const inCart = cartNow.current.find((x) => x.id === p.id);
     const step = stepFor(p.unit || 'pc');
     if (scanOut) {
@@ -308,6 +315,20 @@ export default function POS() {
       .order('name').range(0, 4999)
       .then(({ data }) => setCustomers(data || []));
   }, [isCredit, loy]); // eslint-disable-line
+
+  // the item just made in the quick-add sheet: into the till's list (and the phone's copy) and straight into the sale
+  function quickCreated(p, opening, offline) {
+    setProducts((list) => {
+      const n = [...list.filter((x) => x.id !== p.id), p].sort((a, b) => a.name.localeCompare(b.name));
+      saveKv('products', n.map(strip));
+      return n;
+    });
+    if (opening > 0) setStock((m) => { const n = { ...m, [p.id]: (m[p.id] ?? 0) + opening }; saveKv(`stock:${branchId}`, n); return n; });
+    setCart((c) => [...c, { id: p.id, name: p.name, price: Number(p.price), qty: 1, unit: 'pc', track: true, sid: p.id, allow: !!p.sell_without_stock, pack: false, bmin: null, bprice: null }]);
+    setQuick(null); setQ('');
+    setErr(offline ? `${p.name} is saved on this phone and uploads with the sale.` : '');
+  }
+  const exactName = q.trim() && products.some((p) => norm(p.name) === norm(q));
 
   async function charge(withPrint) {
     const items = priced.filter((c) => c.qty > 0);
@@ -455,7 +476,12 @@ export default function POS() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3h6M9 3v4l-4 6v6a2 2 0 002 2h6a2 2 0 002-2v-6l-4-6V3" /><path d="M5 14h10" /></svg>
             </button>
           )}
-          <button type="button" className="iconbtn" style={barcodeOn ? { marginLeft: 0 } : undefined} onClick={() => { setShowSearch((v) => !v); setTimeout(() => input.current?.focus(), 30); }} aria-label="Search" aria-expanded={showSearch}>
+          {canAdd && (
+            <button type="button" className="iconbtn" style={{ marginLeft: 0 }} onClick={() => setQuick({ text: q })} aria-label="Add a new item and sell it" title="Add a new item and sell it">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+          )}
+          <button type="button" className="iconbtn" style={barcodeOn || canAdd ? { marginLeft: 0 } : undefined} onClick={() => { setShowSearch((v) => !v); setTimeout(() => input.current?.focus(), 30); }} aria-label="Search" aria-expanded={showSearch}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
           </button>
         </div>
@@ -474,8 +500,13 @@ export default function POS() {
         {err && <div className="err">{err}</div>}
         {products.length === 0 && (
           <div className="tint" style={{ marginTop: 12 }}>
-            No {label.toLowerCase()}s yet. {profile.role === 'cashier' ? 'Ask your manager to add some.' : 'Open Products to add your first one.'}
+            No {label.toLowerCase()}s yet. {canAdd ? 'Tap + to add an item and sell it at once, or add them under Products.' : 'Ask your manager to add some.'}
           </div>
+        )}
+        {canAdd && q.trim() && !exactName && (
+          <button type="button" className="btn" style={{ width: '100%', margin: '8px 0', justifyContent: 'flex-start', minHeight: 48, fontWeight: 700 }} onClick={() => setQuick({ text: q })}>
+            + Add "{q.trim().slice(0, 40)}" and sell{filtered.length ? '' : ' (not in your shop yet)'}
+          </button>
         )}
         <div className="tiles">
           {filtered.map((p) => {
@@ -688,6 +719,11 @@ export default function POS() {
         </CameraScanner>
       )}
 
+      {quick && (
+        <QuickAdd text={quick.text} products={products} business={business} branchId={branchId} userId={session?.user?.id}
+          canSeeCost={!isCashier} onClose={() => setQuick(null)}
+          onSell={(p) => { add(p); setQuick(null); setQ(''); }} onCreated={quickCreated} />
+      )}
       {pour && <PourStock branchId={branchId} businessId={business.id} onClose={() => { setPour(false); loadStock(); }} />}
       {eSend && (
         <EReceiptSend
