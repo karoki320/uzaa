@@ -46,12 +46,18 @@ export default function PourStock({ branchId, businessId, onClose, onDone }) {
   const countOf = (p) => (p && !p.track_stock && p.stock_of ? byId[p.stock_of] || p : p);
   const src = byId[fromId];
   const srcCount = countOf(src);
-  // things it can pour into: same name, its own stock count, not the same count as the source
+  // things it can pour into: same name, its own stock count, not the same count as the source,
+  // and counted the same way: oil in ml goes into oil in ml, a bottle (pieces) only into its decants.
+  // (A sealed "Oud Mood" bottle and the "Oud Mood" oil share a name but are different perfumes.)
+  const unitOf = (p) => countOf(p)?.unit || p?.unit || 'pc';
+  const isDecant = (p) => /\bdecants?\b/i.test(p?.name || '');
   const targets = useMemo(() => {
     if (!src) return [];
     const b = baseName(src.name);
     const sc = countOf(src)?.id;
-    return list.filter((p) => p.id !== src.id && baseName(p.name) === b && countOf(p)?.track_stock && countOf(p)?.id !== sc);
+    const su = unitOf(src);
+    return list.filter((p) => p.id !== src.id && baseName(p.name) === b && countOf(p)?.track_stock && countOf(p)?.id !== sc
+      && unitOf(p) === su && (su !== 'pc' || isDecant(p)));
   }, [src, list]); // eslint-disable-line
   const dst = byId[toId];
   // a perfume counted in bottles is decanted; an oil counted in ml is poured
@@ -81,7 +87,7 @@ export default function PourStock({ branchId, businessId, onClose, onDone }) {
   const need = Math.round((Number(qty) || 0) * perN * 1000) / 1000;
   const have = srcCount ? stock[srcCount.id] ?? 0 : 0;
   const short = need > have && !srcCount?.sell_without_stock;
-  const sources = list.filter((p) => p.track_stock && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())));
+  const sources = list.filter((p) => p.track_stock && !isDecant(p) && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())));
 
   // no decant item for this perfume yet: make one on the spot (same name + "decant 10ml")
   async function makeDecant() {
@@ -164,7 +170,9 @@ export default function PourStock({ branchId, businessId, onClose, onDone }) {
                       </div>
                       <button type="button" className="btn small primary" style={{ marginTop: 10 }} disabled={busy} onClick={makeDecant}>Add {src.name.replace(/\s*\([^)]*\)/g, '').trim()} decant {mk.ml || '?'}ml</button>
                     </div>
-                  ) : <p className="small muted" style={{ margin: 0 }}>No other item called “{src.name.replace(/\s*\([^)]*\)/g, '')}” with its own stock. Add the display bottle under Products with the same name.</p>)
+                  ) : <p className="small muted" style={{ margin: 0 }}>{list.some((p) => p.id !== src.id && baseName(p.name) === baseName(src.name) && countOf(p)?.id === srcCount?.id)
+                    ? <>{src.name} already sells from the same stock as the other “{src.name.replace(/\s*\([^)]*\)/g, '')}” item, so there is nothing to pour. Selling either one takes from that one count.</>
+                    : <>No other oil called “{src.name.replace(/\s*\([^)]*\)/g, '')}” counted in {u(unitOf(src))} with its own stock. Add the display bottle under Products with the same name.</>}</p>)
                   : (
                     <div className="segs" role="radiogroup" aria-label="Pour into" style={{ margin: 0, flexWrap: 'wrap' }}>
                       {targets.map((t) => (
@@ -202,7 +210,7 @@ export default function PourStock({ branchId, businessId, onClose, onDone }) {
               {Number(qty) > 0 && perN > 0 && (
                 <p className="small" style={{ marginTop: -4 }}>
                   {decant
-                    ? <>Takes {num(Number(bottles))} bottle{Number(bottles) === 1 ? '' : 's'} of {src.name}, adds {num(Number(qty))} decants.</>
+                    ? <>Takes {num(Number(bottles))} bottle{Number(bottles) === 1 ? '' : 's'} of {src.name}, adds {num(Number(qty))} to {dst.name}.</>
                     : <>Takes {num(need)} {u(src.unit)} from {src.name}, adds {num(Number(qty))} {u(dst.unit)} to {dst.name}.</>}
                 </p>
               )}
