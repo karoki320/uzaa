@@ -4,6 +4,7 @@ import Logo from '@/components/Logo';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import AppTour from '@/components/AppTour';
 import BottomNav from '@/components/BottomNav';
 import InstallApp from '@/components/InstallApp';
 import ThemePick from '@/components/ThemePick';
@@ -135,6 +136,7 @@ export default function Shell({ children }) {
           <span className="small muted desk-only">{profile.full_name} <span className="badge">{profile.role.replace('_', ' ')}</span></span>
           <span className="desk-only" style={{ width: 210 }}><ThemePick label={false} /></span>
           <span className="desk-only"><InstallApp /></span>
+          {['owner', 'manager', 'cashier'].includes(profile.role) && <button className="btn small desk-only" onClick={() => window.dispatchEvent(new CustomEvent('uzaa:tour', { detail: path.startsWith('/pos') ? 'pos' : 'app' }))}>Tour</button>}
           <button className="btn small desk-only" onClick={signOut}>Sign out</button>
         </div>
       </div>
@@ -145,6 +147,7 @@ export default function Shell({ children }) {
       </nav>
       <main className="page"><BillingBanner role={profile.role} /><InstallBanner />{allowed ? children : null}</main>
       <BottomNav items={items} signOut={signOut} who={`${profile.full_name} (${profile.role.replace('_', ' ')})`} />
+      {['owner', 'manager', 'cashier'].includes(profile.role) && <AppTour uid={profile.id} name={profile.full_name} role={profile.role} items={items} />}
     </>
   );
 }

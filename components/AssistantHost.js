@@ -75,7 +75,7 @@ export default function AssistantHost() {
   } else if (owner && business && business.status === 'pending') {
     auto = { flow: 'pending', key: `pending_${business.id}`, open: true, bubble: 'Your account is almost ready. Tap me to see what happens next.' };
   } else if (owner && live && progress && !(progress.products > 0 && progress.sales > 0)) {
-    auto = { flow: 'setup', key: `setup_${business.id}`, open: true, bubble: "Let's finish setting up your business. Tap me." };
+    auto = { flow: 'setup', key: `setup_${business.id}`, open: false, bubble: "Let's finish setting up your business. Tap me." };
   } else if (role !== 'visitor') {
     auto = { flow: null, key: `none_${role}` };
   }

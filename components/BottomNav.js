@@ -20,6 +20,7 @@ const P = {
   '/settings': <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" /></>,
   '/admin': <><path d="M3 21h18M6 21V8h5v13M13 21V3h5v18" /></>,
   '/security': <><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></>,
+  tour: <><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></>,
   more: <><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></>,
   dl: <><path d="M12 4v11M7 11l5 5 5-5M5 20h14" /></>,
   out: <><path d="M9 4H5a1 1 0 00-1 1v14a1 1 0 001 1h4M16 8l4 4-4 4M20 12H9" /></>,
@@ -60,6 +61,8 @@ export default function BottomNav({ items, signOut, who }) {
             ))}
             <div style={{ padding: '10px 8px', borderBottom: '1px solid var(--line)' }}><ThemePick /></div>
             <InstallApp className="sheetinstall" onDone={() => setMore(false)}><Icon k="dl" /><span>Install app on this phone</span></InstallApp>
+            <button type="button" onClick={() => { setMore(false); window.dispatchEvent(new CustomEvent('uzaa:tour', { detail: 'app' })); }}><Icon k="tour" /><span>Take the tour</span></button>
+            {path.startsWith('/pos') && <button type="button" onClick={() => { setMore(false); window.dispatchEvent(new CustomEvent('uzaa:tour', { detail: 'pos' })); }}><Icon k="tour" /><span>Show me the till</span></button>}
             <button type="button" onClick={signOut}><Icon k="out" /><span>Sign out</span></button>
           </div>
         </div>
