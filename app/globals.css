@@ -724,3 +724,9 @@ button.lrow { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .addbtn { animation: none; } }
 @media (min-width: 900px) { .addbtn { margin-left: 0; } }
 .addrow { width: 100%; margin: 8px 0; justify-content: flex-start; min-height: 52px; font-weight: 800; font-size: 15px; border-radius: 14px; }
+/* Continue with Google */
+.gbtn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; text-decoration: none; background: #fff; color: #1F1F1F; border: 1px solid #DADCE0; font-weight: 700; min-height: 50px; }
+.gbtn:hover { background: #F8F9FA; }
+.orline { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--muted); font-size: 13px; }
+.orline::before, .orline::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.more-opts summary { cursor: pointer; font-weight: 700; color: var(--accent); min-height: 40px; display: flex; align-items: center; }

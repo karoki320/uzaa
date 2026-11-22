@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Captcha, { captchaOn } from '@/components/Captcha';
 import { post, go } from '@/lib/api';
+import GoogleButton from '@/components/GoogleButton';
 
 const NOTES = {
   link: 'That link is invalid or has expired. Request a new one below.',
@@ -13,6 +14,9 @@ const NOTES = {
   reset_expired: 'That reset link has expired or was already used. Use "Forgot password" to get a new one.',
   link_device: 'That link could not be opened here. If you were invited, use "Forgot password" to set your password. If you asked for a sign-in link, open it in the same browser you asked from.',
   setup: 'The server is not set up yet. Please contact Uzaa support.',
+  google: 'Google sign-in did not finish. Try again, or sign in with your email below.',
+  google_admin: 'The admin account signs in with email and password.',
+  busy: 'Too many tries. Wait a few minutes and try again.',
 };
 
 function Form() {
@@ -63,6 +67,8 @@ function Form() {
       <div style={{ marginBottom: 8 }}><Logo height={44} /></div>
       <p className="muted">Sign in to your point of sale.</p>
       <form onSubmit={submit} className="card">
+        <GoogleButton next="/home" />
+        <div className="orline">or with email</div>
         <label className="field">
           <span>Email</span>
           <input className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />

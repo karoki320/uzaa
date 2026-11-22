@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import GoogleButton from '@/components/GoogleButton';
 import { PLANS, TRIAL_DAYS } from '@/lib/plans';
 import Logo from '@/components/Logo';
 import Link from 'next/link';
@@ -21,6 +22,9 @@ export default function Signup() {
   const [terms, setTerms] = useState(false);
   const [exists, setExists] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  // back from Google: the name is known already, only the business is left
+  const gname = session?.user?.name || '';
+  useEffect(() => { if (gname) setF((x) => (x.full_name ? x : { ...x, full_name: gname })); }, [gname]);
 
   if (loading) return <div className="center">Loading...</div>;
   // Signed in already with a business (or the business just failed to load): never offer a second one.
@@ -68,8 +72,14 @@ export default function Signup() {
   return (
     <div className="auth">
       <div style={{ marginBottom: 8 }}><Logo height={44} /></div>
-      <p className="muted">Set up your business and start selling today.</p>
+      <p className="muted">{session ? `Hi ${gname.split(' ')[0] || 'there'}, one last step: name your business.` : 'Start selling in under a minute.'}</p>
       <form onSubmit={submit} className="card">
+        {!session && (
+          <>
+            <GoogleButton next="/signup" label="Sign up with Google" />
+            <div className="orline">or with email</div>
+          </>
+        )}
         <label className="field">
           <span>Business name</span>
           <input className="input" required maxLength={120} value={f.business} onChange={set('business')} placeholder="e.g. Mama Njeri Stores" />
@@ -80,19 +90,23 @@ export default function Signup() {
             {Object.entries(TYPE_PRESETS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         </label>
-        <label className="field">
-          <span>Your name</span>
-          <input className="input" required maxLength={120} value={f.full_name} onChange={set('full_name')} />
-        </label>
+        {!(session && gname) && (
+          <label className="field">
+            <span>Your name</span>
+            <input className="input" required maxLength={120} autoComplete="name" value={f.full_name} onChange={set('full_name')} />
+          </label>
+        )}
         {!session && (
           <>
             <label className="field">
               <span>Email</span>
               <input className="input" type="email" required autoComplete="email" value={f.email} onChange={set('email')} />
             </label>
-            <PasswordField value={f.password} onChange={(v) => setF({ ...f, password: v })} email={f.email} confirm />
+            <PasswordField value={f.password} onChange={(v) => setF({ ...f, password: v })} email={f.email} />
           </>
         )}
+        <details className="more-opts">
+          <summary>More options (e-receipts, pay now)</summary>
         <label className="terms-tick">
           <input type="checkbox" checked={f.ereceipt} onChange={(e) => setF({ ...f, ereceipt: e.target.checked })} />
           <span>Send my customers e-receipts on WhatsApp (free). You can add your logo and colours later in Settings.</span>
@@ -122,10 +136,12 @@ export default function Signup() {
             </select>
           </label>
         </fieldset>
+        </details>
+        {f.start === 'trial' && <p className="small muted" style={{ margin: '0 0 8px' }}>Free for {TRIAL_DAYS} days. No payment today.</p>}
         {needCaptcha && captchaOn && <Captcha onToken={setToken} resetKey={ck} />}
         <label className="terms-tick">
           <input type="checkbox" checked={terms} onChange={(e) => { setTerms(e.target.checked); setErr(''); }} />
-          <span>I have read and accept the <Link href="/terms" target="_blank">terms of service</Link>.</span>
+          <span>I have read and accept the <Link href="/terms" target="_blank">terms of service</Link> and <Link href="/privacy" target="_blank">privacy policy</Link>.</span>
         </label>
         {err && <div className="err" role="alert">{err}</div>}
         {exists && (

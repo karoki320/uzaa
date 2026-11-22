@@ -25,7 +25,7 @@ export async function GET() {
   const c = claimsOf(s?.session?.access_token);
   const aal = c.aal || 'aal1';
   const enrolled = (data.user.factors || []).some((f) => f.factor_type === 'totp' && f.status === 'verified');
-  const out = { user: { id: uid, email: data.user.email }, aal, mfaEnrolled: enrolled, mustEnrol: false };
+  const out = { user: { id: uid, email: data.user.email, name: String(data.user.user_metadata?.full_name || data.user.user_metadata?.name || '').slice(0, 120) }, aal, mfaEnrolled: enrolled, mustEnrol: false };
 
   // Your own profile row is always readable to you (policy: id = auth.uid()).
   const { data: profile, error: pErr } = await sb.from('profiles').select('*').eq('id', uid).maybeSingle();
