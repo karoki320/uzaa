@@ -99,7 +99,7 @@ export default function Staff() {
           </tbody>
         </table>
       </div>
-      <p className="muted small">Cashiers only see the Sell and My sales screens for their own branch. Managers also see products, stock and reports.</p>
+      <p className="muted small">Cashiers sell, add products, record expenses and credit, and see their own sales, for their own branch. Managers also see stock and reports.</p>
 
       {pwFor && (
         <Modal title="Set a password" onClose={() => setPwFor(null)}>

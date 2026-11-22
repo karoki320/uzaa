@@ -12,6 +12,8 @@ export async function GET(req) {
   const url = new URL(req.url);
 
   const err = url.searchParams.get('error_description') || url.searchParams.get('error');
+  // a Google sign-in that failed or waited too long on Google's page comes back here too
+  if (err && /oauth|provider/i.test(`${err} ${url.searchParams.get('error_code') || ''}`)) return hop('/login?e=google');
   if (err) return hop(`/login?e=${/expire/i.test(err) ? 'reset_expired' : 'link'}`);
 
   const code = url.searchParams.get('code') || '';

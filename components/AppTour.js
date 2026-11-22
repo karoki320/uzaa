@@ -17,9 +17,9 @@ const MORE = '.bnav button[aria-haspopup]';
 
 const APP_STEPS = [
   { href: '/pos', title: 'Sell', text: 'Your till. Tap items, take cash or M-Pesa. Works offline too.' },
+  { href: '/sales', title: 'Sales', text: 'Every sale and the day\'s totals. Reverse a wrong sale here.' },
   { href: '/products', title: 'Products', text: 'Add your items and prices here.' },
   { href: '/stock', title: 'Stock', text: 'Receive new stock and see what is running low.' },
-  { href: '/sales', title: 'Sales', text: 'Every sale and the day\'s totals. Reverse a wrong sale here.' },
   { href: '/credit', title: 'Credit', text: 'Customers who owe you, and payments as they come in.' },
   { href: '/expenses', title: 'Expenses', text: 'Record rent, transport and other costs.' },
   { href: '/reports', title: 'Reports', text: 'Profit, best sellers and what stands out.' },
@@ -183,7 +183,7 @@ export default function AppTour({ uid, name, role, items }) {
       {box
         ? <div className="tour-spot" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />
         : <div className="tour-dim" />}
-      <div className={`tour-card ${box ? '' : 'center'}`} style={cardStyle}>{body}</div>
+      <div className={`tour-card ${box ? '' : 'mid'}`} style={cardStyle}>{body}</div>
     </div>
   );
 }

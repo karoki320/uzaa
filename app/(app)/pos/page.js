@@ -48,6 +48,7 @@ export default function POS() {
   const [split, setSplit] = useState({ vals: {}, auto: '', shown: splitMethods.slice(0, 2) });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
   const [cat, setCat] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const cartRef = useRef(null);
@@ -83,7 +84,7 @@ export default function POS() {
     if (error) return setRev({ ...rev, busy: false, err: /Only the owner|function .*delete_sale/i.test(error.message) ? 'Run security-patch-23.sql in Supabase so staff can reverse sales.' : error.message });
     if (data) post('/api/sale/deleted', { id: data });   // the owner's phone
     setRev(null); setFlash(null);
-    setErr(`Sale #${flash.no} reversed. The items are back in stock.`);
+    setOk(`Sale #${flash.no} reversed. The items are back in stock.`); setTimeout(() => setOk(''), 6000);
     loadStock();
   }   // Pour / Decant from the till (switched on per business)
 
@@ -499,6 +500,7 @@ export default function POS() {
         </div>
         {(!online || fromCopy) && <div className="tint offlinebar" role="status">Offline. Sales are saved on this phone and upload when you are back online. Prices and stock are from your last connection.</div>}
         {err && <div className="err">{err}</div>}
+        {ok && !err && <div className="tint" role="status" style={{ marginTop: 8 }}>{ok}</div>}
         {products.length === 0 && (
           <div className="tint" style={{ marginTop: 12 }}>
             No {label.toLowerCase()}s yet. {canAdd ? 'Tap + to add an item and sell it at once, or add them under Products.' : 'Ask your manager to add some.'}
