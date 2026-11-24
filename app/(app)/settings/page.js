@@ -206,6 +206,7 @@ export default function Settings() {
     notify_hour: business.notify_hour ?? 20,
     notify_min: business.notify_min ?? 0,
     credit_enabled: !!business.credit_enabled,
+    credit_style: business.credit_style === 'part' ? 'part' : 'credit',
     credit_limit: business.credit_limit ?? 5000,
     loyalty_enabled: !!business.loyalty_enabled,
     loyalty_spend_per_point: business.loyalty_spend_per_point ?? 100,
@@ -261,6 +262,8 @@ export default function Settings() {
       receipt_mode: f.receipt_mode, barcode_enabled: !!f.barcode_enabled,
       payment_methods: methods, custom_fields: cleaned,
       credit_enabled: !!f.credit_enabled, credit_limit: Math.max(0, Number(f.credit_limit) || 0),
+      // sent only when changed, so Settings still saves before patch 24 is run
+      ...(f.credit_style !== (business.credit_style === 'part' ? 'part' : 'credit') ? { credit_style: f.credit_style } : {}),
       // only for businesses with the Loyalty feature, so Settings still saves elsewhere before patch 22 is run
       ...(loyFeat ? {
         loyalty_enabled: !!f.loyalty_enabled,
@@ -299,7 +302,7 @@ export default function Settings() {
           <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2 }}>{business.name}</div>
           <p>Changes apply at once to every screen and receipt.</p>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-            {[['E-receipts', f.ereceipt_enabled], ['Credit', f.credit_enabled], ...(business.features?.loyalty ? [['Loyalty', f.loyalty_enabled]] : []), ['Barcodes', f.barcode_enabled], ['Phone alerts', f.notify_mode !== 'off']].map(([l, on]) => (
+            {[['E-receipts', f.ereceipt_enabled], [f.credit_style === 'part' ? 'Part payment' : 'Credit', f.credit_enabled], ...(business.features?.loyalty ? [['Loyalty', f.loyalty_enabled]] : []), ['Barcodes', f.barcode_enabled], ['Phone alerts', f.notify_mode !== 'off']].map(([l, on]) => (
               <span key={l} style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: on ? 'rgba(133,198,193,0.25)' : 'rgba(255,255,255,0.1)', color: on ? '#BFEDE8' : '#B9CCDA' }}>{on ? '✓' : '○'} {l}</span>
             ))}
           </div>
@@ -402,13 +405,19 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>Credit sales (deni)</h3>
-        <label className="row" style={{ marginBottom: 6 }}>
-          <input type="checkbox" checked={f.credit_enabled} onChange={(e) => setF({ ...f, credit_enabled: e.target.checked })} /> Let my customers take goods on credit
+        <h3>Pay later: credit or part payment</h3>
+        <label className="field" style={{ maxWidth: 360 }}><span>Can customers take goods before paying in full?</span>
+          <select className="input" value={f.credit_enabled ? f.credit_style : 'off'}
+            onChange={(e) => setF({ ...f, credit_enabled: e.target.value !== 'off', credit_style: e.target.value === 'off' ? f.credit_style : e.target.value })}>
+            <option value="off">No, off</option>
+            <option value="credit">Yes, on credit (deni)</option>
+            <option value="part">Yes, by part payment (deposit, then instalments)</option>
+          </select>
         </label>
         <p className="muted small" style={{ marginTop: 0 }}>
-          Credit appears as a payment method at the till. The sale is saved and stock goes down as usual, but it stays
-          unpaid and is recorded against the customer. You keep the list of who owes what under Credit.
+          {f.credit_style === 'part' && f.credit_enabled
+            ? 'Part payment appears at the till. The customer gives their name and WhatsApp number, pays a deposit and takes the item. They pay the rest in any amounts, any time; you record each one under Part payments and send them a WhatsApp receipt with the balance.'
+            : 'Credit appears as a payment method at the till. The sale is saved and stock goes down as usual, but it stays unpaid and is recorded against the customer. You keep the list of who owes what under Credit.'}
         </p>
         {f.credit_enabled && (
           <>
@@ -416,7 +425,7 @@ export default function Settings() {
               <input className="input" inputMode="decimal" value={f.credit_limit} onChange={set('credit_limit')} />
             </label>
             <p className="muted small" style={{ margin: 0 }}>
-              A cashier cannot sell on credit past this amount. Put 0 for no limit. You can set a different limit for
+              A cashier cannot go past this amount. Put 0 for no limit. You can set a different limit for
               one customer on their own page.
             </p>
           </>

@@ -33,7 +33,7 @@ async function load(token) {
   if (!sale) return null;
   const [{ data: items }, { data: business }, { data: branch }, { data: cashier }] = await Promise.all([
     sb.from('sale_items').select('name, qty, price, unit').eq('sale_id', sale.id),
-    sb.from('businesses').select('name, currency, tax_rate, receipt_header, receipt_footer, status, ereceipt_enabled, ereceipt_whatsapp, ereceipt_color, ereceipt_logo, ereceipt_link_label, ereceipt_link_url, ereceipt_powered').eq('id', sale.business_id).maybeSingle(),
+    sb.from('businesses').select('*').eq('id', sale.business_id).maybeSingle(),
     sb.from('branches').select('name, address, phone').eq('id', sale.branch_id).maybeSingle(),
     sale.cashier_id ? sb.from('profiles').select('full_name').eq('id', sale.cashier_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
@@ -127,9 +127,11 @@ export default async function EReceipt({ params }) {
           {Number(sale.points_earned) > 0 && <div className="er-row"><span>Points earned</span><span>{sale.points_earned}</span></div>}
           {sale.payments?.length
             ? payLines(sale).map((p) => <div className="er-row" key={p.method}><span>Paid by {p.method}</span><span>{n2(p.amount)}</span></div>)
-            : <div className="er-row"><span>Paid by {sale.payment_method}</span><span>{n2(sale.amount_paid)}</span></div>}
+            : isCredit
+              ? <div className="er-row"><span>{b.credit_style === 'part' ? 'Paid now' : 'Deposit'}{sale.deposit_method ? ` (${sale.deposit_method})` : ''}</span><span>{n2(sale.amount_paid)}</span></div>
+              : <div className="er-row"><span>Paid by {sale.payment_method}</span><span>{n2(sale.amount_paid)}</span></div>}
           {change > 0 && <div className="er-row"><span>Change</span><span>{n2(change)}</span></div>}
-          {isCredit && owing > 0 && <div className="er-row"><span>Balance on credit</span><span>{n2(owing)}</span></div>}
+          {isCredit && owing > 0 && <div className="er-row"><span>{b.credit_style === 'part' ? 'Balance' : 'Balance on credit'}</span><span>{n2(owing)}</span></div>}
         </section>
 
         {b.receipt_footer ? <p className="er-foot">{b.receipt_footer}</p> : null}

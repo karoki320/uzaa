@@ -47,7 +47,8 @@ export default function Shell({ children }) {
     if (ok === false) window.alert('You are offline. Signing out needs internet. You are still signed in and nothing was lost.');
   };
 
-  const items = profile ? NAV.filter((n) => n.roles.includes(profile.role) && (!n.feature || business?.features?.[n.feature])) : [];
+  const items = profile ? NAV.filter((n) => n.roles.includes(profile.role) && (!n.feature || business?.features?.[n.feature]))
+    .map((n) => (n.href === '/credit' && business?.credit_style === 'part' ? { ...n, label: 'Part payments' } : n)) : [];
   const allowed = items.some((n) => path.startsWith(n.href));
 
   useEffect(() => {

@@ -7,6 +7,7 @@ import CountUp from '@/components/CountUp';
 import { post } from '@/lib/api';
 import CloseDay, { Breakdown } from '@/components/CloseDay';
 import { fmtDate, isoDate, money, payLines, payLabel } from '@/lib/util';
+import { methodName } from '@/lib/credit';
 import Modal from '@/components/Modal';
 import Receipt from '@/components/Receipt';
 import PrintButtons from '@/components/PrintButtons';
@@ -169,14 +170,14 @@ export default function Sales() {
         <div className="splitbar" role="img" aria-label={byMethod.map((x) => `${x.name} ${money(x.total, business.currency)}`).join(', ')}>
           {byMethod.filter((x) => x.total > 0).map((x) => <i key={x.name} style={{ width: `${(x.total / (total || 1)) * 100}%`, background: TONE_BAR[tone(x.name)] }} />)}
         </div>
-        <p style={{ fontSize: 12 }}>{byMethod.length > 1 ? `${byMethod.map((x) => x.name).join(' and ')} add up to the total` : 'All sales for the day'}</p>
+        <p style={{ fontSize: 12 }}>{byMethod.length > 1 ? `${byMethod.map((x) => methodName(x.name, business)).join(' and ')} add up to the total` : 'All sales for the day'}</p>
       </section>
 
       <div className="kpis">
         {byMethod.map((x) => (
           <div className={`kpi pm ${tone(x.name)}`} key={x.name}>
             <span className="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={TONE_ICON[tone(x.name)]} /></svg></span>
-            <div className="l">{x.name}</div>
+            <div className="l">{methodName(x.name, business)}</div>
             <div className="v">{money(x.total, business.currency)}</div>
             <div className="s">{x.count} sale{x.count === 1 ? '' : 's'}{total > 0 ? ` · ${Math.round((x.total / total) * 100)}%` : ''}{x.unpaid > 0 ? ` · ${money(x.unpaid, business.currency)} not paid yet` : ''}</div>
           </div>
@@ -235,7 +236,7 @@ export default function Sales() {
           <button className="lrow" key={s.id} onClick={() => open(s)}>
             <span className="rank" style={{ background: `var(--c-${tone(s.payment_method || '') === 'mpesa' ? 'teal' : tone(s.payment_method || '') === 'credit' ? 'amber' : tone(s.payment_method || '') === 'card' ? 'lav' : 'ice'})`, fontSize: 11 }}>{s.payments ? 'Split' : (s.payment_method || '?').slice(0, 4)}</span>
             <span className="grow2">
-              <b style={{ fontSize: 14 }}>#{s.receipt_no} · {payLabel(s)}
+              <b style={{ fontSize: 14 }}>#{s.receipt_no} · {methodName(payLabel(s), business)}
                 {s.offline && <span className="badge" style={{ marginLeft: 6 }}>offline</span>}
                 {s.price_diff && <span className="badge red" style={{ marginLeft: 6 }} title="Sold at a price different from the list price">price differs</span>}</b>
               <span>{new Date(s.created_at).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' })} · {names[s.cashier_id] || '-'}{branches.length > 1 ? ` · ${branches.find((b) => b.id === s.branch_id)?.name || ''}` : ''}</span>
@@ -286,7 +287,7 @@ export default function Sales() {
                   <tr key={g.id}>
                     <td>#{g.receipt_no}</td>
                     <td>{fmtDate(g.sold_at)}</td>
-                    <td>{g.payment_method}</td>
+                    <td>{methodName(g.payment_method, business)}</td>
                     <td className="num">{money(g.total, business.currency)}</td>
                     <td>{names[g.deleted_by] || '-'}<div className="small muted">{fmtDate(g.created_at)}</div></td>
                     <td>{g.reason}</td>

@@ -40,7 +40,10 @@ export default function Receipt({ business, branch, sale, items, cashier }) {
         {sale.payments?.length
           ? <>{payLines(sale).map((p) => <div className="ln" key={p.method}><span>Paid by {p.method}</span><span>{num(p.amount)}</span></div>)}
               {change > 0 && <div className="ln"><span>Cash given</span><span>{num(p0(sale) + change)}</span></div>}</>
-          : <div className="ln"><span>Paid by {sale.payment_method}</span><span>{num(sale.amount_paid)}</span></div>}
+          : String(sale.payment_method).toLowerCase() === 'credit'
+            ? <><div className="ln"><span>{business?.credit_style === 'part' ? 'Paid now' : 'Deposit'}{sale.deposit_method ? ` (${sale.deposit_method})` : ''}</span><span>{num(sale.amount_paid)}</span></div>
+                <div className="ln"><b>Balance</b><b>{num(Math.max(0, Number(sale.total) - Number(sale.amount_paid || 0)))}</b></div></>
+            : <div className="ln"><span>Paid by {sale.payment_method}</span><span>{num(sale.amount_paid)}</span></div>}
         {change > 0 && <div className="ln"><span>Change</span><span>{num(change)}</span></div>}
         <hr />
         <div className="c" style={{ whiteSpace: 'pre-line' }}>{business?.receipt_footer}</div>

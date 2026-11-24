@@ -5,11 +5,14 @@ import { useAuth } from '@/lib/auth';
 import { money, fmtDate, waLink } from '@/lib/util';
 import Modal from '@/components/Modal';
 import CountUp from '@/components/CountUp';
+import { partStyle } from '@/lib/credit';
 
 const initials = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 export default function Credit() {
-  const { business, profile, session } = useAuth();
+  const { business, profile, session, branches } = useAuth();
+  const part = partStyle(business);   // Part payment (patch 24): deposit now, the rest in instalments
+  const branchId = profile.branch_id || branches?.[0]?.id || null;
   const cur = business.currency;
   const canEdit = profile.role === 'owner' || profile.role === 'manager';
   const [rows, setRows] = useState([]);
@@ -37,6 +40,7 @@ export default function Credit() {
   async function saveCustomer() {
     const name = add.name.trim();
     if (!name) return setErr('Enter the name');
+    if (part && add.phone.trim().replace(/\D/g, '').length < 9) return setErr('Enter their WhatsApp number');
     setBusy(true); setErr('');
     const { error } = await supabase.from('customers').insert({
       business_id: business.id, name: name.slice(0, 80), phone: add.phone.trim().slice(0, 20),
@@ -49,11 +53,11 @@ export default function Credit() {
   if (!business.credit_enabled) {
     return (
       <div className="card">
-        <h2>Credit sales are switched off</h2>
+        <h2>{part ? 'Part payments are' : 'Credit sales are'} switched off</h2>
         <p className="muted">
           {profile.role === 'owner'
-            ? 'Open Settings and turn on credit sales to start recording who owes you.'
-            : 'Ask the business owner to turn on credit sales in Settings.'}
+            ? `Open Settings and turn on ${part ? 'part payments' : 'credit sales'} to start recording who owes you.`
+            : `Ask the business owner to turn on ${part ? 'part payments' : 'credit sales'} in Settings.`}
         </p>
       </div>
     );
@@ -62,13 +66,13 @@ export default function Credit() {
   return (
     <>
       <div className="row between" style={{ marginBottom: 12 }}>
-        <h1 style={{ margin: 0 }}>Credit</h1>
+        <h1 style={{ margin: 0 }}>{part ? 'Part payments' : 'Credit'}</h1>
         <button className="btn primary" onClick={() => { setAdd({ name: '', phone: '' }); setErr(''); }}>+ Customer</button>
       </div>
 
       <section className="hero">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="k">Owed to you</div>
+          <div className="k">{part ? 'Balance still to collect' : 'Owed to you'}</div>
           <div className="big"><CountUp value={owed} format={(v) => money(v, cur)} /></div>
           <p>{owing ? <><b>{owing}</b> {owing === 1 ? 'person owes' : 'people owe'} you{biggest ? <>. Most: <b>{biggest.name}</b>, {money(biggest.balance, cur)}</> : ''}.</> : 'Nobody owes you anything right now.'}</p>
         </div>
@@ -81,7 +85,7 @@ export default function Credit() {
       {err && <div className="err">{err}</div>}
 
       <div className="card">
-        {list.length === 0 && <p className="muted" style={{ margin: 0 }}>{rows.length ? 'Nobody matches that.' : 'No customers yet. Add one, or choose Credit at the till.'}</p>}
+        {list.length === 0 && <p className="muted" style={{ margin: 0 }}>{rows.length ? 'Nobody matches that.' : `No customers yet. Add one, or choose ${part ? 'Part payment' : 'Credit'} at the till.`}</p>}
         {list.map((r) => {
           const owes = Number(r.balance) > 0;
           const lim = Number(r.credit_limit) || 0;
@@ -102,7 +106,7 @@ export default function Credit() {
       {add && (
         <Modal title="Add a customer" onClose={() => setAdd(null)}>
           <label className="field"><span>Name</span><input className="input" autoFocus value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} /></label>
-          <label className="field"><span>Phone number (for reminders)</span><input className="input" inputMode="tel" placeholder="0722 000 111" value={add.phone} onChange={(e) => setAdd({ ...add, phone: e.target.value })} /></label>
+          <label className="field"><span>{part ? 'WhatsApp number' : 'Phone number (for reminders)'}</span><input className="input" inputMode="tel" placeholder="0722 000 111" value={add.phone} onChange={(e) => setAdd({ ...add, phone: e.target.value })} /></label>
           {err && <div className="err">{err}</div>}
           <button className="btn primary" style={{ width: '100%' }} disabled={busy} onClick={saveCustomer}>{busy ? 'Saving...' : 'Save customer'}</button>
         </Modal>
@@ -110,16 +114,19 @@ export default function Credit() {
 
       {open && (
         <CustomerSheet
-          row={open} cur={cur} canEdit={canEdit} business={business} userId={session?.user?.id}
-          onClose={() => setOpen(null)} onChanged={() => { load(); setOpen(null); }}
+          row={open} cur={cur} canEdit={canEdit} business={business} userId={session?.user?.id} part={part} branchId={branchId}
+          onClose={() => setOpen(null)} onChanged={() => { load(); setOpen(null); }} onPaid={load}
         />
       )}
     </>
   );
 }
 
-function CustomerSheet({ row, cur, canEdit, business, userId, onClose, onChanged }) {
+function CustomerSheet({ row, cur, canEdit, business, userId, part, branchId, onClose, onChanged, onPaid }) {
   const [sales, setSales] = useState([]);
+  const [took, setTook] = useState({});       // sale id -> what they took
+  const [done, setDone] = useState(null);     // the instalment just recorded: { amount, left }
+  const [owes, setOwes] = useState(Number(row.balance || 0));
   const [pays, setPays] = useState([]);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState((business.payment_methods || ['Cash'])[0]);
@@ -128,27 +135,45 @@ function CustomerSheet({ row, cur, canEdit, business, userId, onClose, onChanged
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    supabase.from('sales').select('id,receipt_no,total,amount_paid,created_at').eq('customer_id', row.id).eq('payment_method', 'Credit')
-      .order('created_at', { ascending: false }).limit(50).then(({ data }) => setSales(data || []));
+    supabase.from('sales').select('*').eq('customer_id', row.id).eq('payment_method', 'Credit')
+      .order('created_at', { ascending: false }).limit(50).then(async ({ data }) => {
+        setSales(data || []);
+        const ids = (data || []).map((x) => x.id);
+        if (!ids.length) return;
+        const { data: it } = await supabase.from('sale_items').select('sale_id,name,qty').in('sale_id', ids);
+        const m = {};
+        (it || []).forEach((i) => { (m[i.sale_id] = m[i.sale_id] || []).push(`${i.name}${Number(i.qty) !== 1 ? ` x ${Number(i.qty)}` : ''}`); });
+        setTook(m);
+      });
     supabase.from('credit_payments').select('*').eq('customer_id', row.id)
       .order('created_at', { ascending: false }).limit(50).then(({ data }) => setPays(data || []));
   }, [row.id]);
 
-  const balance = Number(row.balance || 0);
-  const msg = `Hello ${row.name}, this is ${business.name}. Your balance with us is ${money(balance, cur)}. Thank you.`;
+  const balance = owes;
+  const msg = part
+    ? `Hello ${row.name}, this is ${business.name}. Your balance for the items you took is ${money(balance, cur)}. You can pay any amount, any time. Thank you.`
+    : `Hello ${row.name}, this is ${business.name}. Your balance with us is ${money(balance, cur)}. Thank you.`;
   const wa = waLink(row.phone, msg);
+  // receipt for an instalment, sent from the shop's own WhatsApp
+  const paidWa = done ? waLink(row.phone, done.left > 0
+    ? `Hello ${row.name}, ${business.name} has received ${money(done.amount, cur)}. Thank you. Balance: ${money(done.left, cur)}.`
+    : `Hello ${row.name}, ${business.name} has received ${money(done.amount, cur)}. You have now paid in full. Thank you!`) : '';
 
   async function pay() {
     const a = Number(amount);
     if (!(a > 0)) return setErr('Enter the amount they paid');
     if (a > balance) return setErr(`That is more than the ${money(balance, cur)} they owe`);
     setBusy(true); setErr('');
+    // branch_id: Close day counts cash instalments per branch
     const { error } = await supabase.from('credit_payments').insert({
-      business_id: business.id, customer_id: row.id, amount: a, method, user_id: userId,
+      business_id: business.id, customer_id: row.id, amount: a, method, user_id: userId, branch_id: branchId,
     });
     setBusy(false);
     if (error) return setErr(error.message);
-    onChanged();
+    const left = Math.round((balance - a) * 100) / 100;
+    setOwes(left); setAmount(''); setDone({ amount: a, left });
+    setPays((l) => [{ id: `new-${Date.now()}`, amount: a, method, created_at: new Date().toISOString() }, ...l]);
+    onPaid?.();
   }
 
   async function saveLimit() {
@@ -172,7 +197,7 @@ function CustomerSheet({ row, cur, canEdit, business, userId, onClose, onChanged
       {balance > 0 && (
         <>
           <div className="row" style={{ alignItems: 'flex-end' }}>
-            <label className="field grow" style={{ marginBottom: 0 }}><span>They paid</span>
+            <label className="field grow" style={{ marginBottom: 0 }}><span>{part ? 'Amount they brought' : 'They paid'}</span>
               <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={String(balance)} />
             </label>
             <label className="field" style={{ marginBottom: 0, width: 140 }}><span>By</span>
@@ -188,6 +213,12 @@ function CustomerSheet({ row, cur, canEdit, business, userId, onClose, onChanged
           {wa && <a className="btn" href={wa} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 10, lineHeight: '28px' }}>Remind on WhatsApp</a>}
         </>
       )}
+      {done && (
+        <div className="tint" style={{ marginTop: 10 }}>
+          <b>Received {money(done.amount, cur)}.</b> {done.left > 0 ? `Balance ${money(done.left, cur)}.` : 'Paid in full.'}
+          {paidWa && <a className="btn primary" href={paidWa} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 8, lineHeight: '28px' }}>Send receipt on WhatsApp</a>}
+        </div>
+      )}
       {err && <div className="err">{err}</div>}
 
       {canEdit && (
@@ -199,19 +230,19 @@ function CustomerSheet({ row, cur, canEdit, business, userId, onClose, onChanged
         </div>
       )}
 
-      <h3 style={{ marginBottom: 6 }}>Taken on credit</h3>
+      <h3 style={{ marginBottom: 6 }}>{part ? 'What they took' : 'Taken on credit'}</h3>
       {sales.length === 0 && <p className="muted small" style={{ marginTop: 0 }}>Nothing yet.</p>}
       {sales.map((s) => (
         <div key={s.id} className="pendrow">
-          <div><b>#{s.receipt_no}</b><div className="small muted">{fmtDate(s.created_at)}</div></div>
+          <div><b>#{s.receipt_no}</b>{took[s.id] && <div className="small">{took[s.id].join(', ')}</div>}<div className="small muted">{fmtDate(s.created_at)}</div></div>
           <div style={{ textAlign: 'right' }}>
             <b>{money(s.total, cur)}</b>
-            {Number(s.amount_paid) > 0 && <div className="small muted">deposit {money(s.amount_paid, cur)}</div>}
+            {Number(s.amount_paid) > 0 && <div className="small muted">deposit {money(s.amount_paid, cur)}{s.deposit_method ? ` (${s.deposit_method})` : ''}</div>}
           </div>
         </div>
       ))}
 
-      <h3 style={{ marginBottom: 6 }}>Payments</h3>
+      <h3 style={{ marginBottom: 6 }}>{part ? 'Instalments paid' : 'Payments'}</h3>
       {pays.length === 0 && <p className="muted small" style={{ marginTop: 0 }}>None yet.</p>}
       {pays.map((p) => (
         <div key={p.id} className="pendrow">

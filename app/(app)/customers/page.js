@@ -6,6 +6,7 @@ import { money, num, fmtDate, waLink } from '@/lib/util';
 import Modal from '@/components/Modal';
 import CountUp from '@/components/CountUp';
 import { loyaltyOn, pointsWorth } from '@/lib/loyalty';
+import { methodName } from '@/lib/credit';
 
 // Customers and loyalty points (patch 22). Shown when the super admin switches on Loyalty for the business.
 const initials = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -220,7 +221,7 @@ function CustomerSheet({ row, cur, canEdit, business, on, onClose, onChanged }) 
       {sales.length === 0 && <p className="muted small" style={{ marginTop: 0 }}>Nothing yet.</p>}
       {sales.map((s) => (
         <div key={s.id} className="pendrow">
-          <div><b>#{s.receipt_no}</b><div className="small muted">{fmtDate(s.created_at)} · {s.payment_method}</div></div>
+          <div><b>#{s.receipt_no}</b><div className="small muted">{fmtDate(s.created_at)} · {methodName(s.payment_method, business)}</div></div>
           <div style={{ textAlign: 'right' }}>
             <b>{money(s.total, cur)}</b>
             {on && (Number(s.points_earned) > 0 || Number(s.points_used) > 0) && (
